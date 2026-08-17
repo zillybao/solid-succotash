@@ -77,7 +77,7 @@ Logs:
 
 ## GitHub Actions
 
-[`.github/workflows/intern-finder.yml`](.github/workflows/intern-finder.yml) runs three times a day (`0 12,18,0 * * *` UTC ≈ 8am / 2pm / 8pm EST) and on `workflow_dispatch`.
+[`.github/workflows/intern-finder.yml`](.github/workflows/intern-finder.yml) runs twice a day (`0 0,12 * * *` UTC ≈ 8pm / 8am EST) and on `workflow_dispatch`.
 
 Repo secrets:
 

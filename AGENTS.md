@@ -1,7 +1,7 @@
 # AGENTS.md
 
 ## Project Overview
-A scheduled agent that scans a configured list of company career boards **2–3 times a
+A scheduled agent that scans a configured list of company career boards **twice a
 day**, detects new internships relevant to embedded/firmware/ASIC/FPGA/RTL work, and
 **appends only new rows** to a Google Sheet.
 
@@ -190,8 +190,8 @@ is `open` / `applied` / `closed`. Optional Slack (`SLACK_WEBHOOK_URL`) posts a
 short digest of new rows and of per-site failures; it is not required.
 
 ## Scheduling
-- Cadence: 2–3 runs/day. Workflow cron: `0 12,18,0 * * *` UTC (8am / 2pm / 8pm
-  EST; not DST-aware).
+- Cadence: 2 runs/day. Workflow cron: `0 0,12 * * *` UTC (8pm / 8am EST; not
+  DST-aware).
 - Each run is a **full scan** of all sites (idempotent writes). Runtime does not
   shrink on later runs.
 - Prefer GitHub Actions or cron over an always-on process.
