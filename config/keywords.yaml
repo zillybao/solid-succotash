@@ -1,0 +1,13 @@
+# Description-body keywords (case-insensitive substring match).
+# A posting is kept only if its description matches at least one of these.
+keywords:
+  - embedded
+  - firmware
+  - asic
+  - fpga
+  - rtl
+  - mcu
+  - microcontroller
+  - micro-controller
+  - micro-controllers
+  - microcontrollers

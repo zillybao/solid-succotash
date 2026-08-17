@@ -1,0 +1,53 @@
+name: Intern Finder
+
+on:
+  schedule:
+    # 8:00, 14:00, 20:00 America/New_York ≈ 12:00, 18:00, 00:00 UTC (EST)
+    # Adjust if you need DST-aware timing via a cron wrapper.
+    - cron: "0 12,18,0 * * *"
+  workflow_dispatch:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Write service-account credentials
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          python -c "import os,pathlib; pathlib.Path('credentials.json').write_text(os.environ['GOOGLE_SERVICE_ACCOUNT_JSON'], encoding='utf-8')"
+
+      - name: Restore seen-jobs cache
+        uses: actions/cache@v4
+        with:
+          path: state
+          key: seen-jobs-${{ github.run_id }}
+          restore-keys: |
+            seen-jobs-
+
+      - name: Run scanner
+        env:
+          GOOGLE_SERVICE_ACCOUNT_FILE: credentials.json
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          GOOGLE_SHEET_WORKSHEET: ${{ secrets.GOOGLE_SHEET_WORKSHEET }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: python -m src.run
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-logs
+          path: logs/
+          if-no-files-found: ignore
