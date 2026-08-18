@@ -1,0 +1,232 @@
+# US location filter. Tune this file, not filter.py.
+#
+# A posting is kept if the location looks US (country name, state name, or
+# "City, ST" abbreviation). It is dropped if a foreign country is named and
+# there is no US signal. Empty / "Remote" / city-only strings are kept.
+
+us_country:
+  - united states of america
+  - united states
+  - u.s.a.
+  - u.s.a
+  - usa
+  - u.s.
+  - u.s
+  - us
+
+us_states:
+  - alabama
+  - alaska
+  - arizona
+  - arkansas
+  - california
+  - colorado
+  - connecticut
+  - delaware
+  - district of columbia
+  - florida
+  - georgia
+  - hawaii
+  - idaho
+  - illinois
+  - indiana
+  - iowa
+  - kansas
+  - kentucky
+  - louisiana
+  - maine
+  - maryland
+  - massachusetts
+  - michigan
+  - minnesota
+  - mississippi
+  - missouri
+  - montana
+  - nebraska
+  - nevada
+  - new hampshire
+  - new jersey
+  - new mexico
+  - new york
+  - north carolina
+  - north dakota
+  - ohio
+  - oklahoma
+  - oregon
+  - pennsylvania
+  - rhode island
+  - south carolina
+  - south dakota
+  - tennessee
+  - texas
+  - utah
+  - vermont
+  - virginia
+  - washington
+  - west virginia
+  - wisconsin
+  - wyoming
+  - puerto rico
+  - guam
+  - american samoa
+  - u.s. virgin islands
+  - us virgin islands
+  - northern mariana islands
+
+# Matched as a token after a comma or as the whole location ("Austin, TX", "CA").
+us_state_abbreviations:
+  - AL
+  - AK
+  - AZ
+  - AR
+  - CA
+  - CO
+  - CT
+  - DE
+  - DC
+  - FL
+  - GA
+  - HI
+  - ID
+  - IL
+  - IN
+  - IA
+  - KS
+  - KY
+  - LA
+  - ME
+  - MD
+  - MA
+  - MI
+  - MN
+  - MS
+  - MO
+  - MT
+  - NE
+  - NV
+  - NH
+  - NJ
+  - NM
+  - NY
+  - NC
+  - ND
+  - OH
+  - OK
+  - OR
+  - PA
+  - RI
+  - SC
+  - SD
+  - TN
+  - TX
+  - UT
+  - VT
+  - VA
+  - WA
+  - WV
+  - WI
+  - WY
+  - PR
+  - GU
+  - VI
+  - AS
+  - MP
+
+# Full names / phrases. Prefer these over 2-letter codes that collide with
+# US states (CA/Canada, IN/India, DE/Germany, CO/Colombia, ID/Indonesia).
+foreign_countries:
+  - canada
+  - mexico
+  - united kingdom
+  - great britain
+  - england
+  - scotland
+  - wales
+  - northern ireland
+  - ireland
+  - germany
+  - france
+  - netherlands
+  - belgium
+  - switzerland
+  - austria
+  - sweden
+  - norway
+  - denmark
+  - finland
+  - iceland
+  - italy
+  - spain
+  - portugal
+  - poland
+  - czech republic
+  - czechia
+  - hungary
+  - romania
+  - bulgaria
+  - greece
+  - turkey
+  - israel
+  - united arab emirates
+  - uae
+  - saudi arabia
+  - qatar
+  - india
+  - china
+  - japan
+  - south korea
+  - korea
+  - singapore
+  - taiwan
+  - hong kong
+  - australia
+  - new zealand
+  - brazil
+  - argentina
+  - chile
+  - colombia
+  - malaysia
+  - thailand
+  - vietnam
+  - philippines
+  - indonesia
+  - pakistan
+  - bangladesh
+  - sri lanka
+  - south africa
+  - egypt
+  - nigeria
+  - kenya
+  - morocco
+  - russia
+  - ukraine
+
+# Standalone codes that do not collide with US state abbreviations.
+foreign_codes:
+  - UK
+  - GB
+  - GBR
+  - DEU
+  - FRA
+  - CAN
+  - MEX
+  - IND
+  - CHN
+  - JPN
+  - KOR
+  - SGP
+  - AUS
+  - NZL
+  - IRL
+  - NLD
+  - SWE
+  - CHE
+  - ITA
+  - ESP
+  - POL
+  - ISR
+  - ARE
+  - TWN
+  - HKG
+  - BRA
+  - ARG

@@ -8,8 +8,9 @@ There is no Playwright and no generic crawler. Each company in `config/sites.yam
 
 - Scans ~91 companies listed in `config/sites.yaml` (sequential HTTP, public ATS JSON where possible).
 - Title-gates on intern / co-op **before** fetching descriptions.
-- Keeps a posting only if the description matches a keyword in `config/keywords.yaml`.
-- Dedupes on the canonical job link. New matches are appended; history is never overwritten.
+- Drops postings whose location is clearly non-US (`config/locations.yaml`). Empty / remote / city-only locations are kept.
+- Keeps a posting only if the description matches a keyword in `config/keywords.yaml` (token match, so `asic` does not match `basic`).
+- Dedupes on the canonical job link. New matches are appended in one write at the end of the run; history is never overwritten.
 - Marks previously `open` / `applied` rows `closed` when that link disappears from the company’s live intern-titled set.
 - Optional Slack digest of new rows and per-site failures.
 
@@ -25,14 +26,16 @@ It does **not** auto-apply, scrape sites outside `sites.yaml`, or write descript
 
 ```bash
 python -m venv .venv
-# Windows
-.venv\Scripts\activate
+# Windows PowerShell
+.\.venv\Scripts\Activate.ps1
 # macOS / Linux
 source .venv/bin/activate
 
 pip install -r requirements.txt
 cp .env.example .env
 ```
+
+Use a native Windows Python (not MSYS2) so `pip` can install wheels. `GOOGLE_SHEET_ID` must be **your** spreadsheet (the value in `.env.example` is only a placeholder).
 
 ### Google Sheets
 
@@ -54,7 +57,7 @@ Sheet columns (created automatically if the first row is empty):
 | company | title | link | location | status | date_found | date_posted | source_page |
 |---------|-------|------|----------|--------|------------|-------------|-------------|
 
-`status` is `open` or `closed` from the scanner; set `applied` yourself. Newest rows are at the bottom.
+`link` is the job posting (dedupe key). `source_page` is the career-board URL from `sites.yaml` (used for closed-status). `status` is `open` or `closed` from the scanner; set `applied` yourself. Newest rows are at the bottom. Leave row 1 as headers in A–H only.
 
 ## Run
 
@@ -66,14 +69,14 @@ python -m src.run              # write to Google Sheets
 python -m pytest
 ```
 
-`--dry-run` is the way to preview a first run. A company’s **first two recorded (non-dry) runs** keep intern titles even without a keyword hit (`first_seen_runs: 2`), so a real write can dump a large intern inventory.
+`--dry-run` is the way to preview a first run (no sheet or `state/` writes). A company’s **first recorded (non-dry) run** still applies a 3-day `date_posted` lookback; undated postings are kept. Keywords are enforced immediately (`first_seen_runs: 0`).
 
-Typical wall time is **15–25 minutes**. A single site failure is logged and the rest continue. Exit codes: `0` clean, `1` some sites failed, `2` sheet unavailable (non-dry-run).
+The sheet does not update until the scan finishes. Typical wall time is **15–25 minutes**. A single site failure is logged and the rest continue. Exit codes: `0` clean, `1` some sites failed, `2` sheet unavailable (non-dry-run).
 
 Logs:
 
-- `logs/run-YYYY-MM-DD.log` — full run
-- `logs/skipped-YYYY-MM-DD.log` — intern titles dropped by the keyword filter
+- `logs/run-YYYY-MM-DD.log` — full run (`parsed`, `non-US`, `kept after keywords`, `new`)
+- `logs/skipped-YYYY-MM-DD.log` — intern titles dropped by the US-location or keyword filter
 
 ## GitHub Actions
 
@@ -100,18 +103,21 @@ The workflow caches `state/` (`seen_jobs.json`, `company_runs.json`) between run
   board: examplecorp
   url: https://boards.greenhouse.io/examplecorp
   expected_min: 1
-  first_seen_runs: 2
+  first_seen_runs: 0
 ```
 
 Before adding a company: confirm `robots.txt` / ToS, prefer a public JSON list API, and use intern facets/`query` on large Workday / Eightfold / Phenom boards. Companies still waiting on a parser live in `config/urls_skipped.txt`.
 
-**Keywords** — edit `config/keywords.yaml`. A posting is kept if the description contains any of: `embedded`, `firmware`, `asic`, `fpga`, `rtl`, `mcu`, `microcontroller` (and a few spellings). Matching is case-insensitive substring on the **body**, not the title.
+**Keywords** — edit `config/keywords.yaml`. A posting is kept if the description contains any of: `embedded`, `firmware`, `asic`, `fpga`, `rtl`, `mcu`, `microcontroller` (and a few spellings). Matching is case-insensitive **token** match on the **body**, not the title (plurals like `ASICs` still count).
+
+**Locations** — edit `config/locations.yaml`. Drop listings that name a foreign country with no US signal; keep US country/state/`City, ST` forms and ambiguous/empty locations.
 
 ## Layout
 
 ```
 config/sites.yaml      # companies + ATS + board/host/query/facets
 config/keywords.yaml   # description-body keywords
+config/locations.yaml  # US vs non-US location filter
 config/urls.txt        # original career-page inventory
 config/urls_skipped.txt
 src/run.py             # fetch → parse → filter → dedupe → sheet

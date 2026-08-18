@@ -33,6 +33,7 @@ Supported `ats` values: `greenhouse`, `lever`, `ashby`, `workday`, `eightfold`,
 - Poll only the companies listed in `config/sites.yaml`.
 - Extract title, canonical link, location, and posting date when the ATS exposes it.
 - Match **description body** against `config/keywords.yaml` (not title alone).
+- Drop listings whose location is clearly non-US (`config/locations.yaml`).
 - Append only *new* postings — never duplicate, never overwrite history, never write
   description text to the sheet.
 - Mark previously `open`/`applied` rows `closed` when the link disappears from that
@@ -54,13 +55,14 @@ Supported `ats` values: `greenhouse`, `lever`, `ashby`, `workday`, `eightfold`,
 config/
   sites.yaml              # companies + ats + board/host/query/facets
   keywords.yaml           # description-body keywords
+  locations.yaml          # US vs non-US location filter
   urls.txt                # original URL inventory
   urls_skipped.txt        # not yet parsed
 src/
   run.py                  # fetch -> parse -> filter -> dedupe -> sheet
   fetch.py                # sequential httpx client, retry, split delays
   parse.py                # ATS parsers -> list[JobPosting]
-  filter.py               # title noise filter + description keywords
+  filter.py               # title noise + US location + description keywords
   dedupe.py               # link normalize + seen-hash cache
   sheet.py                # Google Sheets read/append/mark-closed
   models.py               # JobPosting, SHEET_HEADERS, SCHEMA_VERSION
@@ -70,7 +72,7 @@ state/
   company_runs.json       # per-company run count / first-seen lookback
 logs/
   run-YYYY-MM-DD.log
-  skipped-YYYY-MM-DD.log  # intern titles dropped by keyword filter
+  skipped-YYYY-MM-DD.log  # intern titles dropped by location or keyword filter
 tests/
   fixtures/               # saved HTML for generic parser tests
 ```
@@ -97,9 +99,14 @@ python -m src.run              # write to Google Sheets
    payload can be huge and time out; slim list + intern-only details is the
    intended path. If list JSON already has a description (Lever, Ashby, Amazon,
    Phenom, some Eightfold), use it and skip the extra call.
-3. **Keyword-filter** the description in memory against `config/keywords.yaml`.
-   Strip `description` before any sheet/cache write.
-4. **Dedupe** on `normalize_link(link)` SHA-256 vs sheet rows ∪ `seen_jobs.json`.
+3. **Location-filter** against `config/locations.yaml`. Drop if a foreign country
+   is named with no US signal; keep US country/state/`City, ST` forms and
+   empty/remote/city-only strings.
+4. **Keyword-filter** the description in memory against `config/keywords.yaml`
+   (token match, so `asic` does not match `basic`). Strip `description` before
+   any sheet/cache write.
+5. **Dedupe** on `normalize_link(link)` SHA-256 vs sheet rows ∪ `seen_jobs.json`.
+   New rows and closed-status updates are written once at the **end** of the run.
 
 Sites are scanned **sequentially**. Delays in `src/fetch.py`:
 
@@ -132,7 +139,9 @@ Each posting normalizes to:
 | source_page  | str    | `url` from `sites.yaml` (also the key for closed-status checks) |
 
 Sheet columns (`SCHEMA_VERSION = 1`): `company`, `title`, `link`, `location`,
-`status`, `date_found`, `date_posted`, `source_page`. Version sentinel in `Z1`.
+`status`, `date_found`, `date_posted`, `source_page`. Headers live in A–H only;
+do not write sentinels outside that table (a value in Z1 made `append_rows`
+land in column Z). Pin appends with `table_range="A1"`.
 
 ## Spreadsheet Contract
 - One row per unique normalized `link`.
@@ -147,26 +156,29 @@ Sheet columns (`SCHEMA_VERSION = 1`): `company`, `title`, `link`, `location`,
 
 ## Keyword Filtering
 Keep a posting only if its **description** contains at least one keyword from
-`config/keywords.yaml` (case-insensitive substring):
+`config/keywords.yaml` (case-insensitive **token** match; optional trailing `s`):
 
 `embedded`, `firmware`, `asic`, `fpga`, `rtl`, `mcu`, `microcontroller`,
 `micro-controller`, `micro-controllers`, `microcontrollers`
 
 Tune that file, not `parse.py`. Title-only matching misses “Software Engineering
-Intern” roles whose FPGA/RTL work is in the body.
+Intern” roles whose FPGA/RTL work is in the body. Do not use raw substring match
+(`asic` is a substring of `basic qualifications`).
 
-Skipped intern titles (no keyword hit) go to `logs/skipped-YYYY-MM-DD.log`
-(company, title, link — not the description).
+Skipped intern titles (no keyword hit, or non-US location) go to
+`logs/skipped-YYYY-MM-DD.log` (company, title, link — not the description).
 
 **Title noise filter** is separate and runs first: drop non-intern titles so we
 never spend HTTP on them. Arm uses a custom `title_keywords` list so `"intern"`
 does not match **interconnect**.
 
-**Log-only buffer:** `first_seen_runs: 2` on current sites means the first two
-recorded runs keep intern titles even without a keyword hit (still logged as
-would-be skips). Lookback (below) only applies on the company’s *first* recorded
-run. Together, run 2 can dump the full intern inventory for dated boards — be
-aware before the first real Sheets write; `--dry-run` is the way to preview.
+**Location filter** (`config/locations.yaml`) runs after the intern title gate
+and before keywords. False negatives (missed US internships) are worse than a
+few extra rows — keep empty/ambiguous locations.
+
+**Log-only buffer:** `first_seen_runs: 0` on current sites, so keyword misses
+are dropped immediately. Lookback (below) only applies on the company’s *first*
+recorded run. `--dry-run` is the way to preview a write.
 
 ## Status Tracking
 Each run, intern-titled links still live on that `source_page` are the “open”
@@ -203,7 +215,7 @@ short digest of new rows and of per-site failures; it is not required.
   board: examplecorp       # ATS slug / Workday site / Oracle siteNumber
   url: https://boards.greenhouse.io/examplecorp
   expected_min: 1          # warn if intern-titled count drops below this
-  first_seen_runs: 2       # log-only keyword buffer for this many runs
+  first_seen_runs: 0       # 0 = always enforce keywords (no log-only keep)
   # Workday extras: workday_host, workday_tenant, applied_facets
   # Eightfold extras: domain, eightfold_api (v2|pcsx), query, extra_params
   # Oracle extras: oracle_host, board, query
@@ -233,7 +245,7 @@ short digest of new rows and of per-site failures; it is not required.
 ```
 python -m pytest
 ```
-Cover link normalization, keyword filter, Greenhouse intern-only detail fetches,
+Cover link normalization, keyword token match, US location filter, Greenhouse intern-only detail fetches,
 TalentBrew card HTML, Amazon-style dates, and spreadsheet-ID extraction from a
 docs URL.
 
@@ -244,12 +256,13 @@ Google, Tesla, and TalentBrew often have no dates — lookback will not shrink
 those boards. Amazon English dates (`July 29, 2026`) are parsed.
 
 `first_seen_runs` counts successful-or-failed attempts once state is saved (not
-on `--dry-run`). A failed first real run still consumes “new company” lookback
+on `--dry-run`). With `first_seen_runs: 0` it does not keep keyword misses; it
+still matters for the 3-day lookback (lookback is “no row in company_runs”
+regardless). A failed first real run still consumes “new company” lookback
 on the next real run.
 
 ## Open Questions / TODO
-- First full (non-dry) run has not been done yet; expect to tune `expected_min`,
-  lookback, and `first_seen_runs` once real skipped/new-row logs exist.
+- Tune `expected_min` and lookback from skipped/new-row logs after more runs.
 - Remaining runtime: 15 Workday sites with no intern facet; Phenom sites with
   empty `query`; Arm TalentBrew full-board list.
 - GitHub Actions 30-minute cap vs a slow 35–45 min run.

@@ -1,6 +1,7 @@
 """Tests for spreadsheet helpers that do not need the Sheets API."""
 
-from src.sheet import spreadsheet_id_from_value
+from src.models import SHEET_HEADERS
+from src.sheet import records_from_values, spreadsheet_id_from_value
 
 
 def test_spreadsheet_id_from_raw_id() -> None:
@@ -15,3 +16,20 @@ def test_spreadsheet_id_from_docs_url() -> None:
         "1H0buUOQGmhKLn93DnAH9DmHySsqXANciCAA74KmZWQs/edit?gid=0#gid=0"
     )
     assert spreadsheet_id_from_value(url) == "1H0buUOQGmhKLn93DnAH9DmHySsqXANciCAA74KmZWQs"
+
+
+def test_records_from_values_ignores_z1_schema_sentinel() -> None:
+    header = list(SHEET_HEADERS) + [""] * 17 + ["schema_version=1"]
+    values = [
+        header,
+        ["Acme", "Firmware Intern", "https://example.com/1", "Austin", "open", "2026-08-18", "", "https://board"],
+        ["", "", "", "", "", "", "", ""],
+    ]
+    rows = records_from_values(values)
+    assert len(rows) == 1
+    assert rows[0]["company"] == "Acme"
+    assert rows[0]["link"] == "https://example.com/1"
+
+
+def test_records_from_values_headers_only() -> None:
+    assert records_from_values([list(SHEET_HEADERS)]) == []

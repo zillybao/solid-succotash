@@ -13,7 +13,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 from src.dedupe import link_hash, normalize_link
-from src.models import SHEET_HEADERS, SCHEMA_VERSION, JobPosting
+from src.models import SHEET_HEADERS, JobPosting
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +38,33 @@ def spreadsheet_id_from_value(value: str) -> str:
     text = value.strip()
     match = _SHEET_ID_FROM_URL.search(text)
     return match.group(1) if match else text
+
+
+def records_from_values(values: list[list[Any]]) -> list[dict[str, str]]:
+    """Turn sheet grid values into row dicts using columns A–H only."""
+    if len(values) <= 1:
+        return []
+
+    header_row = values[0]
+    headers: list[str] = []
+    for i, expected in enumerate(SHEET_HEADERS):
+        raw = header_row[i] if i < len(header_row) else expected
+        name = str(raw).strip() or expected
+        headers.append(name)
+
+    records: list[dict[str, str]] = []
+    for row in values[1:]:
+        record: dict[str, str] = {}
+        nonempty = False
+        for i, key in enumerate(headers):
+            cell = row[i] if i < len(row) and row[i] is not None else ""
+            text = str(cell)
+            record[key] = text
+            if text.strip():
+                nonempty = True
+        if nonempty:
+            records.append(record)
+    return records
 
 
 def _credentials_from_env() -> Credentials:
@@ -74,8 +101,6 @@ class JobSheet:
         existing = self._sheet.row_values(1)
         if not existing:
             self._sheet.update(range_name="A1", values=[SHEET_HEADERS], value_input_option="RAW")
-            # Store schema version in a sentinel cell; bump SCHEMA_VERSION on layout changes.
-            self._sheet.update(range_name="Z1", values=[[f"schema_version={SCHEMA_VERSION}"]])
             return
         if [h.lower() for h in existing[: len(SHEET_HEADERS)]] != SHEET_HEADERS:
             logger.warning(
@@ -85,8 +110,10 @@ class JobSheet:
             )
 
     def all_rows(self) -> list[dict[str, str]]:
-        records = self._sheet.get_all_records()
-        return [{str(k): str(v) if v is not None else "" for k, v in row.items()} for row in records]
+        # get_all_records() treats the entire first row as headers. The schema
+        # sentinel in Z1 leaves blank cells in I1:Y1, which gspread rejects as
+        # duplicate empty headers. Map A–H only.
+        return records_from_values(self._sheet.get_all_values())
 
     def known_link_hashes(self) -> set[str]:
         hashes: set[str] = set()
@@ -132,7 +159,13 @@ class JobSheet:
         if not postings:
             return 0
         rows = [p.sheet_row() for p in postings]
-        self._sheet.append_rows(rows, value_input_option="USER_ENTERED")
+        # table_range="A1" pins the logical table to the header row. Without it,
+        # Sheets treats the schema sentinel in Z1 as the table and appends at Z.
+        self._sheet.append_rows(
+            rows,
+            value_input_option="USER_ENTERED",
+            table_range="A1",
+        )
         return len(rows)
 
     def mark_closed(self, row_numbers: list[int]) -> int:

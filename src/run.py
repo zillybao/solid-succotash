@@ -15,7 +15,13 @@ from dotenv import load_dotenv
 
 from src.dedupe import SeenJobsCache, link_hash
 from src.fetch import FetchError, Fetcher
-from src.filter import filter_by_description, load_keywords, strip_descriptions
+from src.filter import (
+    filter_by_description,
+    filter_by_us_location,
+    load_keywords,
+    load_us_location_filter,
+    strip_descriptions,
+)
 from src.models import JobPosting
 from src.notify import notify_failures, notify_new_postings
 from src.parse import SiteConfig, parse_site
@@ -27,6 +33,7 @@ STATE_DIR = ROOT / "state"
 LOGS_DIR = ROOT / "logs"
 SITES_PATH = CONFIG_DIR / "sites.yaml"
 KEYWORDS_PATH = CONFIG_DIR / "keywords.yaml"
+LOCATIONS_PATH = CONFIG_DIR / "locations.yaml"
 SEEN_PATH = STATE_DIR / "seen_jobs.json"
 COMPANY_STATE_PATH = STATE_DIR / "company_runs.json"
 
@@ -99,6 +106,7 @@ def run(
 
     sites = load_sites(sites_path)
     keywords = load_keywords(keywords_path)
+    us_locations = load_us_location_filter(LOCATIONS_PATH)
     company_state = _load_company_state()
     cache = SeenJobsCache(SEEN_PATH)
 
@@ -170,8 +178,17 @@ def run(
                         entry["status"],
                     )
 
+            us_kept, non_us = filter_by_us_location(postings, us_locations)
+            if non_us:
+                log.info(
+                    "%s: dropped %s non-US location(s)",
+                    site.company,
+                    len(non_us),
+                )
+                _log_skipped(non_us, today)
+
             kept, skipped = filter_by_description(
-                postings,
+                us_kept,
                 keywords,
                 log_only=log_only_filter,
             )
@@ -193,9 +210,10 @@ def run(
             strip_descriptions(new_postings)
             all_new.extend(new_postings)
             log.info(
-                "%s: %s parsed, %s kept after keywords, %s new",
+                "%s: %s parsed, %s non-US, %s kept after keywords, %s new",
                 site.company,
                 len(postings),
+                len(non_us),
                 len(kept),
                 len(new_postings),
             )
