@@ -21,6 +21,12 @@ def _phrase_pattern(phrase: str) -> re.Pattern[str]:
     return re.compile(rf"(?<![a-z0-9]){escaped}(?![a-z0-9])")
 
 
+def _foreign_code_pattern(code: str) -> re.Pattern[str]:
+    """Match a country code as a token, including office suffixes like UK2."""
+    escaped = re.escape(code.lower())
+    return re.compile(rf"(?<![a-z0-9]){escaped}\d*(?![a-z0-9])")
+
+
 @dataclass(frozen=True)
 class UsLocationFilter:
     """Keep US / ambiguous locations; drop explicit non-US countries."""
@@ -37,18 +43,17 @@ class UsLocationFilter:
             for p in list(data.get("us_country") or []) + list(data.get("us_states") or [])
         ]
         us_phrases.sort(key=len, reverse=True)
-        foreign_phrases = [
-            str(p).lower()
-            for p in list(data.get("foreign_countries") or []) + list(data.get("foreign_codes") or [])
-        ]
+        foreign_phrases = [str(p).lower() for p in (data.get("foreign_countries") or [])]
         foreign_phrases.sort(key=len, reverse=True)
+        foreign_codes = [str(p).lower() for p in (data.get("foreign_codes") or [])]
         abbrs = [str(a).lower() for a in (data.get("us_state_abbreviations") or [])]
         abbr_alt = "|".join(re.escape(a) for a in abbrs) if abbrs else "a^"
         # "Austin, TX" / "CA" / "Santa Clara, CA, United States"
         state_abbr_re = re.compile(rf"(?:^|,\s*)(?:{abbr_alt})(?:\s*,|\s*$)", re.I)
         return cls(
             us_patterns=tuple(_phrase_pattern(p) for p in us_phrases),
-            foreign_patterns=tuple(_phrase_pattern(p) for p in foreign_phrases),
+            foreign_patterns=tuple(_phrase_pattern(p) for p in foreign_phrases)
+            + tuple(_foreign_code_pattern(c) for c in foreign_codes),
             state_abbr_re=state_abbr_re,
         )
 

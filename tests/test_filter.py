@@ -92,6 +92,10 @@ def test_us_location_drops_foreign_countries() -> None:
     assert not rules.is_us("Seoul, South Korea")
     assert not rules.is_us("Cambridge, UK")
     assert not rules.is_us("Berlin, DEU")
+    # Greenhouse office names attach a site number to the country code.
+    assert not rules.is_us("London - UK2")
+    assert not rules.is_us("UK2")
+    assert rules.is_us("Cambridge, MA")
 
 
 def test_filter_by_us_location_splits_postings() -> None:

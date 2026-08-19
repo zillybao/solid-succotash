@@ -1,7 +1,7 @@
 """Tests for spreadsheet helpers that do not need the Sheets API."""
 
 from src.models import SHEET_HEADERS
-from src.sheet import records_from_values, spreadsheet_id_from_value
+from src.sheet import records_from_values, resolve_worksheet_name, spreadsheet_id_from_value
 
 
 def test_spreadsheet_id_from_raw_id() -> None:
@@ -33,3 +33,11 @@ def test_records_from_values_ignores_z1_schema_sentinel() -> None:
 
 def test_records_from_values_headers_only() -> None:
     assert records_from_values([list(SHEET_HEADERS)]) == []
+
+
+def test_resolve_worksheet_name_defaults_when_env_blank(monkeypatch) -> None:
+    monkeypatch.setenv("GOOGLE_SHEET_WORKSHEET", "")
+    assert resolve_worksheet_name() == "Sheet1"
+    monkeypatch.delenv("GOOGLE_SHEET_WORKSHEET", raising=False)
+    assert resolve_worksheet_name() == "Sheet1"
+    assert resolve_worksheet_name("  Internships  ") == "Internships"

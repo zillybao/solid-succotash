@@ -202,6 +202,7 @@ foreign_countries:
   - ukraine
 
 # Standalone codes that do not collide with US state abbreviations.
+# Trailing digits are allowed so office names like "London - UK2" match.
 foreign_codes:
   - UK
   - GB

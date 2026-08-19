@@ -42,7 +42,18 @@ jobs:
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
           GOOGLE_SHEET_WORKSHEET: ${{ secrets.GOOGLE_SHEET_WORKSHEET }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        run: python -m src.run
+        run: |
+          set +e
+          python -m src.run
+          code=$?
+          if [ "$code" -eq 0 ]; then
+            exit 0
+          fi
+          if [ "$code" -eq 1 ]; then
+            echo "::warning::Some career boards failed (Tesla/Apple/Google often 403 from GitHub IPs). New sheet rows were still written. Search the log for 'ERROR [run]'."
+            exit 0
+          fi
+          exit "$code"
 
       - name: Upload logs
         if: always()

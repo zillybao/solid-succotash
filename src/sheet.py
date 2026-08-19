@@ -40,6 +40,18 @@ def spreadsheet_id_from_value(value: str) -> str:
     return match.group(1) if match else text
 
 
+def resolve_worksheet_name(explicit: str | None = None) -> str:
+    """Worksheet tab name. Blank env/secret values fall back to Sheet1.
+
+    GitHub Actions always injects ``GOOGLE_SHEET_WORKSHEET`` when the workflow
+    maps the secret, even if the secret is unset (empty string). ``os.getenv``
+    would otherwise skip the default and look up a tab named ``""``.
+    """
+    raw = explicit if explicit is not None else os.getenv("GOOGLE_SHEET_WORKSHEET")
+    name = (raw or "").strip()
+    return name or "Sheet1"
+
+
 def records_from_values(values: list[list[Any]]) -> list[dict[str, str]]:
     """Turn sheet grid values into row dicts using columns A–H only."""
     if len(values) <= 1:
@@ -92,9 +104,23 @@ class JobSheet:
         self.spreadsheet_id = spreadsheet_id_from_value(raw_id)
         if not self.spreadsheet_id:
             raise SheetError("GOOGLE_SHEET_ID is not set.")
-        self.worksheet_name = worksheet_name or os.getenv("GOOGLE_SHEET_WORKSHEET", "Sheet1")
+        self.worksheet_name = resolve_worksheet_name(worksheet_name)
         self._client = gspread.authorize(_credentials_from_env())
-        self._sheet = self._client.open_by_key(self.spreadsheet_id).worksheet(self.worksheet_name)
+        try:
+            self._sheet = self._client.open_by_key(self.spreadsheet_id).worksheet(
+                self.worksheet_name
+            )
+        except gspread.exceptions.WorksheetNotFound as exc:
+            raise SheetError(
+                f"Worksheet {self.worksheet_name!r} not found. Set "
+                "GOOGLE_SHEET_WORKSHEET to the tab name at the bottom of the "
+                "spreadsheet, or omit it to use Sheet1."
+            ) from exc
+        except gspread.exceptions.SpreadsheetNotFound as exc:
+            raise SheetError(
+                f"Spreadsheet {self.spreadsheet_id!r} not found or the service "
+                "account does not have access."
+            ) from exc
         self._ensure_headers()
 
     def _ensure_headers(self) -> None:
