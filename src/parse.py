@@ -344,6 +344,47 @@ def _parse_ashby(site: SiteConfig, fetcher: Fetcher) -> list[JobPosting]:
     return postings
 
 
+def _workday_country_name(info: dict[str, Any]) -> str:
+    """Country descriptor from a Workday jobPostingInfo payload."""
+    country = info.get("country")
+    if isinstance(country, dict):
+        name = str(country.get("descriptor") or "").strip()
+        if name:
+            return name
+    req = info.get("jobRequisitionLocation")
+    if isinstance(req, dict):
+        nested = req.get("country")
+        if isinstance(nested, dict):
+            return str(nested.get("descriptor") or "").strip()
+    return ""
+
+
+def _workday_location(list_location: str, info: dict[str, Any] | None) -> str:
+    """Combine CXS list city (often city-only) with country from the intern detail.
+
+    Workday ``locationsText`` is typically ``Hyderabad`` / ``Bucharest`` with no
+    country. The detail fetch already includes ``country.descriptor`` (India,
+    Romania, United States, …); appending it lets the US filter drop non-US
+    sites without a foreign-city denylist. City-only is kept if detail is missing.
+    """
+    city = (list_location or "").strip()
+    if not isinstance(info, dict):
+        return city
+    if not city:
+        city = str(info.get("location") or "").strip()
+    country = _workday_country_name(info)
+    if not country:
+        return city
+    if city:
+        if re.search(
+            rf"(?<![a-z0-9]){re.escape(country.lower())}(?![a-z0-9])",
+            city.lower(),
+        ):
+            return city
+        return f"{city}, {country}"
+    return country
+
+
 def _parse_workday(site: SiteConfig, fetcher: Fetcher, *, today: date) -> list[JobPosting]:
     """Parse Workday CXS job board (POST /wday/cxs/{tenant}/{board}/jobs)."""
     if not site.board or not site.workday_host or not site.workday_tenant:
@@ -409,6 +450,7 @@ def _parse_workday(site: SiteConfig, fetcher: Fetcher, *, today: date) -> list[J
             if info.get("externalUrl"):
                 link = normalize_link(str(info["externalUrl"]))
             posted = _parse_date(info.get("postedDate") or info.get("startDate")) or posted
+            location = _workday_location(location, info)
         except Exception as exc:  # noqa: BLE001 — keep listing without description
             logger.warning("%s: Workday detail failed for %s: %s", site.company, path, exc)
 

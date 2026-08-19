@@ -101,7 +101,11 @@ python -m src.run              # write to Google Sheets
    Phenom, some Eightfold), use it and skip the extra call.
 3. **Location-filter** against `config/locations.yaml`. Drop if a foreign country
    is named with no US signal; keep US country/state/`City, ST` forms and
-   empty/remote/city-only strings.
+   empty/remote/city-only strings. Workday list `locationsText` is often
+   city-only (`Hyderabad`); after the intern detail fetch, append
+   `jobPostingInfo.country.descriptor` so it becomes `Hyderabad, India` and
+   the existing country list can drop it. Do not add a foreign-city denylist.
+   If the detail call fails, city-only stays (kept as ambiguous).
 4. **Keyword-filter** the description in memory against `config/keywords.yaml`
    (token match, so `asic` does not match `basic`). Strip `description` before
    any sheet/cache write.

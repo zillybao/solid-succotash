@@ -88,6 +88,8 @@ def test_us_location_drops_foreign_countries() -> None:
     assert not rules.is_us("Toronto, ON, Canada")
     assert not rules.is_us("London, UK")
     assert not rules.is_us("Bengaluru, India")
+    assert not rules.is_us("Hyderabad, India")
+    assert not rules.is_us("Bucharest, Romania")
     assert not rules.is_us("Remote - India")
     assert not rules.is_us("Seoul, South Korea")
     assert not rules.is_us("Cambridge, UK")

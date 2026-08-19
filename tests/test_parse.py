@@ -12,6 +12,7 @@ from src.parse import (
     _smartrecruiters_description,
     _smartrecruiters_location,
     _talentbrew_cards,
+    _workday_location,
     parse_html_fixture,
     parse_site,
 )
@@ -148,3 +149,34 @@ def test_greenhouse_detail_fetch_only_intern_titles() -> None:
     by_title = {p.title: p for p in postings}
     assert "RTL" in by_title["FPGA Intern"].description
     assert "firmware" in by_title["Avionics Intern"].description
+
+
+def test_workday_location_appends_country_from_detail() -> None:
+    india = {"country": {"descriptor": "India"}, "location": "Hyderabad"}
+    assert _workday_location("Hyderabad", india) == "Hyderabad, India"
+    romania = {
+        "country": {"descriptor": "Romania"},
+        "jobRequisitionLocation": {
+            "descriptor": "Bucharest",
+            "country": {"descriptor": "Romania", "alpha2Code": "RO"},
+        },
+    }
+    assert _workday_location("Bucharest", romania) == "Bucharest, Romania"
+    already = {"country": {"descriptor": "United States"}}
+    assert (
+        _workday_location("Austin, TX, United States", already)
+        == "Austin, TX, United States"
+    )
+    assert _workday_location("Austin", already) == "Austin, United States"
+    assert _workday_location("Hyderabad", {}) == "Hyderabad"
+    assert _workday_location("Hyderabad", None) == "Hyderabad"
+    assert (
+        _workday_location(
+            "",
+            {
+                "location": "Hyderabad",
+                "jobRequisitionLocation": {"country": {"descriptor": "India"}},
+            },
+        )
+        == "Hyderabad, India"
+    )
