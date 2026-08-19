@@ -153,6 +153,9 @@ land in column Z). Pin appends with `table_range="A1"`.
 - Do not silently reshape existing columns — bump `SCHEMA_VERSION`.
 - `GOOGLE_SHEET_ID` may be the raw ID or a
   `https://docs.google.com/spreadsheets/d/<id>/...` URL.
+- `GOOGLE_SHEET_WORKSHEET` is the tab name. Blank / unset (including an empty
+  GitHub Actions secret) falls back to `Sheet1` — Actions always injects the
+  env var when the workflow maps the secret, even if the secret does not exist.
 
 ## Keyword Filtering
 Keep a posting only if its **description** contains at least one keyword from
@@ -173,8 +176,13 @@ never spend HTTP on them. Arm uses a custom `title_keywords` list so `"intern"`
 does not match **interconnect**.
 
 **Location filter** (`config/locations.yaml`) runs after the intern title gate
-and before keywords. False negatives (missed US internships) are worse than a
-few extra rows — keep empty/ambiguous locations.
+and before keywords. A US country/state/`City, ST` signal **wins** over a
+foreign country in the same string (`US and Canada` is kept). Foreign country
+*names* plus `foreign_codes` (UK, GBR, … including office suffixes like `UK2`)
+drop a listing only when there is no US signal. Do not put 2-letter codes that
+collide with US states (`CA`, `IN`, `DE`, `CO`, `ID`) in `foreign_codes`. False
+negatives (missed US internships) are worse than a few extra rows — keep
+empty/ambiguous locations.
 
 **Log-only buffer:** `first_seen_runs: 0` on current sites, so keyword misses
 are dropped immediately. Lookback (below) only applies on the company’s *first*
@@ -207,6 +215,12 @@ short digest of new rows and of per-site failures; it is not required.
 - Each run is a **full scan** of all sites (idempotent writes). Runtime does not
   shrink on later runs.
 - Prefer GitHub Actions or cron over an always-on process.
+- Actions does not read `.env`. Required repo secrets: `GOOGLE_SERVICE_ACCOUNT_JSON`
+  (full key file contents) and `GOOGLE_SHEET_ID`. Optional: `GOOGLE_SHEET_WORKSHEET`,
+  `SLACK_WEBHOOK_URL`.
+- The workflow maps scanner exit `1` (some boards failed) to a warning and a green
+  job, because Tesla/Apple/Google often 403 from GitHub IPs and new rows are still
+  written. Exit `2` (sheet unavailable) still fails the job.
 
 ## Config Conventions (`config/sites.yaml`)
 ```yaml
@@ -230,8 +244,9 @@ short digest of new rows and of per-site failures; it is not required.
 
 ## Error Handling
 - One site failing (timeout, 403, layout change) must not crash the run.
-- Log `{company}: {exception}` and continue. Exit `1` if any site failed, `2` if
-  the sheet is unavailable (non-dry-run), `0` on a clean run.
+- Log `{company}: {exception}` and continue. Exit `1` if any site failed (rows
+  from successful sites are still written), `2` if the sheet is unavailable
+  (non-dry-run), `0` on a clean run.
 - Slack failure digest if `SLACK_WEBHOOK_URL` is set. Repeated-failure tracking
   across runs is not implemented.
 
@@ -246,8 +261,8 @@ short digest of new rows and of per-site failures; it is not required.
 python -m pytest
 ```
 Cover link normalization, keyword token match, US location filter, Greenhouse intern-only detail fetches,
-TalentBrew card HTML, Amazon-style dates, and spreadsheet-ID extraction from a
-docs URL.
+TalentBrew card HTML, Amazon-style dates, spreadsheet-ID extraction from a
+docs URL, and blank `GOOGLE_SHEET_WORKSHEET` → `Sheet1`.
 
 ## First-Run Behavior
 When a company has **no** row in `state/company_runs.json`, apply a **3-day**
