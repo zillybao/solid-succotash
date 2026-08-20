@@ -1,0 +1,72 @@
+# Conservative post-undergrad filter. Tune this file, not filter.py.
+#
+# Drop when:
+#   - the title is clearly a PhD / doctoral intern, OR
+#   - the description requires a master's/PhD / already-graduated and has
+#     no bachelor / undergraduate alternative.
+# Keep "Graduate Intern" titles (often BS seniors) and "Bachelor's or above".
+
+title_drop:
+  - phd intern
+  - ph.d. intern
+  - ph.d intern
+  - doctoral intern
+  - doctorate intern
+  - postdoctoral
+  - post-doctoral
+  - post-doc
+  - postdoc intern
+
+graduate_required:
+  - phd required
+  - ph.d. required
+  - ph.d required
+  - doctoral degree required
+  - doctorate required
+  - master's required
+  - masters required
+  - master's degree required
+  - masters degree required
+  - ms required
+  - m.s. required
+  - must have a master's
+  - must have a masters
+  - must have an ms
+  - must have a phd
+  - must have a ph.d
+  - already graduated
+  - must have graduated
+  - recent college graduate
+  - recent graduate only
+  - phd candidates only
+  - doctoral candidates only
+  - currently enrolled in a master's
+  - currently enrolled in a masters
+  - currently enrolled in an ms
+  - currently enrolled in a phd
+  - currently enrolled in a ph.d
+  - currently enrolled in a master's or phd
+  - pursuing a master's
+  - pursuing a masters
+  - pursuing an ms
+  - pursuing a phd
+  - pursuing a ph.d
+  - enrolled in a graduate program
+  - enrolled in graduate school
+
+undergrad_ok:
+  - bachelor
+  - undergraduate
+  - undergrad
+  - b.s.
+  - b.s
+  - bs/ms
+  - b.s./m.s.
+  - bs or ms
+  - bachelor's or
+  - bachelors or
+  - bachelor or
+  - pursuing a bachelor
+  - pursuing an undergraduate
+  - currently enrolled in a bachelor
+  - currently pursuing a bachelor

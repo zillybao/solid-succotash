@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date
 from pathlib import Path
 from typing import Any
 
 from src.parse import (
     SiteConfig,
+    _eightfold_location,
     _parse_date,
     _smartrecruiters_description,
     _smartrecruiters_location,
@@ -99,6 +101,8 @@ def test_parse_date_amazon_and_iso() -> None:
     assert _parse_date("Aug 12, 2026") == date(2026, 8, 12)
     assert _parse_date("2026-08-15T12:00:00.000Z") == date(2026, 8, 15)
     assert _parse_date("") is None
+    assert _parse_date(0) is None
+    assert _parse_date(None) is None
 
 
 def test_greenhouse_detail_fetch_only_intern_titles() -> None:
@@ -180,3 +184,41 @@ def test_workday_location_appends_country_from_detail() -> None:
         )
         == "Hyderabad, India"
     )
+
+
+def test_eightfold_location_expands_iso_country() -> None:
+    shanghai = _eightfold_location(
+        {
+            "locations": ["Shanghai", "上海 (China)"],
+            "standardizedLocations": ["Shanghai, Shanghai, CN"],
+        }
+    )
+    assert "Shanghai" in shanghai
+    assert "China" in shanghai
+    assert ", CN" not in shanghai
+
+    linz = _eightfold_location(
+        {
+            "locations": ["Linz"],
+            "standardizedLocations": ["Linz, Upper Austria, AT"],
+        }
+    )
+    assert linz == "Linz; Austria"
+
+    lynnwood = _eightfold_location(
+        {
+            "locations": ["Lynnwood", "WA (United States)"],
+            "standardizedLocations": ["Lynnwood, WA, US"],
+        }
+    )
+    assert "Lynnwood" in lynnwood
+    assert "United States" in lynnwood
+    # Raw ISO "DE" would look like Delaware; we expand to the country name.
+    munich = _eightfold_location(
+        {
+            "locations": ["Munich (Germany)"],
+            "standardizedLocations": ["Munich, BY, DE"],
+        }
+    )
+    assert "Germany" in munich
+    assert not re.search(r",\s*DE$", munich)

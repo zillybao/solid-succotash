@@ -56,23 +56,24 @@ config/
   sites.yaml              # companies + ats + board/host/query/facets
   keywords.yaml           # description-body keywords
   locations.yaml          # US vs non-US location filter
+  education.yaml          # post-undergrad / graduate-only drop phrases
   urls.txt                # original URL inventory
   urls_skipped.txt        # not yet parsed
 src/
   run.py                  # fetch -> parse -> filter -> dedupe -> sheet
   fetch.py                # sequential httpx client, retry, split delays
   parse.py                # ATS parsers -> list[JobPosting]
-  filter.py               # title noise + US location + description keywords
+  filter.py               # title noise + US location + date + education + keywords
   dedupe.py               # link normalize + seen-hash cache
   sheet.py                # Google Sheets read/append/mark-closed
   models.py               # JobPosting, SHEET_HEADERS, SCHEMA_VERSION
   notify.py               # optional Slack digest
 state/
   seen_jobs.json          # local hash cache (gitignored)
-  company_runs.json       # per-company run count / first-seen lookback
+  company_runs.json       # per-company run count
 logs/
   run-YYYY-MM-DD.log
-  skipped-YYYY-MM-DD.log  # intern titles dropped by location or keyword filter
+  skipped-YYYY-MM-DD.log  # intern titles dropped by location, date, education, or keywords
 tests/
   fixtures/               # saved HTML for generic parser tests
 ```
@@ -101,15 +102,29 @@ python -m src.run              # write to Google Sheets
    Phenom, some Eightfold), use it and skip the extra call.
 3. **Location-filter** against `config/locations.yaml`. Drop if a foreign country
    is named with no US signal; keep US country/state/`City, ST` forms and
-   empty/remote/city-only strings. Workday list `locationsText` is often
+   empty/remote/unknown city-only strings. Workday list `locationsText` is often
    city-only (`Hyderabad`); after the intern detail fetch, append
-   `jobPostingInfo.country.descriptor` so it becomes `Hyderabad, India` and
-   the existing country list can drop it. Do not add a foreign-city denylist.
-   If the detail call fails, city-only stays (kept as ambiguous).
-4. **Keyword-filter** the description in memory against `config/keywords.yaml`
+   `jobPostingInfo.country.descriptor` so it becomes `Hyderabad, India`.
+   Eightfold (Infineon) list `locations[0]` is often city-only (`Shanghai`,
+   `Linz`); join the rest of `locations` and expand `standardizedLocations`
+   ISO codes (`CN`, `AT`) to country names — never leave raw `DE`/`CA` in the
+   string (those collide with US states). `foreign_cities` is a backstop for
+   unambiguous hubs (Shanghai, Linz, Hyderabad, Munich, …) when country is
+   still missing. Do not add US-homonym cities (Cambridge, London, Vancouver).
+   If the Workday detail call fails and the city is not listed, city-only stays
+   (kept as ambiguous).
+4. **Date-filter** dated postings older than **7 days**. Apply this *after*
+   computing the live intern-titled set used for closed-status, so an old but
+   still-posted intern is not marked closed. Undated postings are kept
+   (Google, Tesla, TalentBrew often have no dates).
+5. **Education-filter** against `config/education.yaml`. Drop titles that are
+   clearly PhD/postdoc internships, and descriptions that require a master’s/PhD
+   or already-graduated with no bachelor/undergrad alternative. Keep
+   “Graduate Intern” titles and “Bachelor’s or above”.
+6. **Keyword-filter** the description in memory against `config/keywords.yaml`
    (token match, so `asic` does not match `basic`). Strip `description` before
    any sheet/cache write.
-5. **Dedupe** on `normalize_link(link)` SHA-256 vs sheet rows ∪ `seen_jobs.json`.
+7. **Dedupe** on `normalize_link(link)` SHA-256 vs sheet rows ∪ `seen_jobs.json`.
    New rows and closed-status updates are written once at the **end** of the run.
 
 Sites are scanned **sequentially**. Delays in `src/fetch.py`:
@@ -172,32 +187,41 @@ Tune that file, not `parse.py`. Title-only matching misses “Software Engineeri
 Intern” roles whose FPGA/RTL work is in the body. Do not use raw substring match
 (`asic` is a substring of `basic qualifications`).
 
-Skipped intern titles (no keyword hit, or non-US location) go to
-`logs/skipped-YYYY-MM-DD.log` (company, title, link — not the description).
+Skipped intern titles (no keyword hit, non-US location, older than 7 days, or
+post-undergrad-only) go to `logs/skipped-YYYY-MM-DD.log` (company, title, link —
+not the description).
 
 **Title noise filter** is separate and runs first: drop non-intern titles so we
 never spend HTTP on them. Arm uses a custom `title_keywords` list so `"intern"`
 does not match **interconnect**.
 
 **Location filter** (`config/locations.yaml`) runs after the intern title gate
-and before keywords. A US country/state/`City, ST` signal **wins** over a
-foreign country in the same string (`US and Canada` is kept). Foreign country
-*names* plus `foreign_codes` (UK, GBR, … including office suffixes like `UK2`)
-drop a listing only when there is no US signal. Do not put 2-letter codes that
-collide with US states (`CA`, `IN`, `DE`, `CO`, `ID`) in `foreign_codes`. False
-negatives (missed US internships) are worse than a few extra rows — keep
-empty/ambiguous locations.
+and before date/education/keywords. A US country/state/`City, ST` signal **wins**
+over a foreign country in the same string (`US and Canada` is kept). Foreign
+country *names* plus `foreign_codes` (UK, GBR, … including office suffixes like
+`UK2`) drop a listing only when there is no US signal. `foreign_cities` drops
+unambiguous non-US hubs when the ATS omitted the country. Do not put 2-letter
+codes that collide with US states (`CA`, `IN`, `DE`, `CO`, `ID`) in
+`foreign_codes`, and do not list US-homonym cities. False negatives (missed US
+internships) are still worse than a few extra rows — keep empty/unknown-city
+locations.
+
+**Date filter:** every run, drop internships whose `date_posted` is older than
+7 days. Undated = kept. This no longer depends on `company_runs.json`; a second
+scan cannot dump a backlog of month-old jobs that the first lookback skipped.
+
+**Education filter** (`config/education.yaml`): conservative. Tune phrases from
+skipped/new-row logs. Do not drop on the word “graduate” alone.
 
 **Log-only buffer:** `first_seen_runs: 0` on current sites, so keyword misses
-are dropped immediately. Lookback (below) only applies on the company’s *first*
-recorded run. `--dry-run` is the way to preview a write.
+are dropped immediately. `--dry-run` is the way to preview a write.
 
 ## Status Tracking
 Each run, intern-titled links still live on that `source_page` are the “open”
 set. Sheet rows for that source with status `open` or `applied` whose normalized
 link is missing are set to `closed` (row kept). Never move `applied` back to
-`open`. Closed-status uses the title-filtered live set, not the keyword-filtered
-set — a still-posted intern that fails keywords is not marked closed.
+`open`. Closed-status uses the title-filtered live set, not the keyword/date/education-filtered
+set — a still-posted intern that fails later filters is not marked closed.
 
 ## Reliability & Site Health
 - Sequential requests only; split JSON vs HTML delays (see Methods).
@@ -264,21 +288,38 @@ short digest of new rows and of per-site failures; it is not required.
 ```
 python -m pytest
 ```
-Cover link normalization, keyword token match, US location filter, Greenhouse intern-only detail fetches,
+Cover link normalization, keyword token match, US location filter, 7-day posted-date
+lookback, education filter, Greenhouse intern-only detail fetches,
 TalentBrew card HTML, Amazon-style dates, spreadsheet-ID extraction from a
 docs URL, and blank `GOOGLE_SHEET_WORKSHEET` → `Sheet1`.
 
-## First-Run Behavior
-When a company has **no** row in `state/company_runs.json`, apply a **3-day**
-`date_posted` lookback. Undated postings are treated as “found today” (kept).
-Google, Tesla, and TalentBrew often have no dates — lookback will not shrink
-those boards. Amazon English dates (`July 29, 2026`) are parsed.
+## Posted-date lookback
+Every run drops internships with `date_posted` older than **7 days**. Undated
+postings are treated as “found today” (kept). Google, Tesla, and TalentBrew often
+have no dates — lookback will not shrink those boards. Amazon English dates
+(`July 29, 2026`) are parsed. Workday `startDate` is the posting start (used when
+`postedDate` is missing). Eightfold `postedTs=0` is treated as unknown, not 1970.
 
 `first_seen_runs` counts successful-or-failed attempts once state is saved (not
-on `--dry-run`). With `first_seen_runs: 0` it does not keep keyword misses; it
-still matters for the 3-day lookback (lookback is “no row in company_runs”
-regardless). A failed first real run still consumes “new company” lookback
-on the next real run.
+on `--dry-run`). With `first_seen_runs: 0` it does not keep keyword misses.
+
+## Education filter (post-undergrad)
+v1 is phrase-based and conservative (`config/education.yaml`):
+
+- Drop titles like `PhD Intern` / `postdoctoral`.
+- Drop descriptions that require a master’s/PhD or already-graduated **unless**
+  a bachelor/undergrad phrase is also present (`Bachelor's or above`, `BS/MS`).
+- Do **not** drop `Graduate Intern` titles (often BS seniors).
+
+Follow-ups (tune from skipped logs, do not broaden blindly):
+
+- Add company-specific “join as / student type” fields when an ATS exposes them
+  (Infineon `custom_JD.join_as` is already `Student/Intern` on intern reqs).
+- Watch false drops on “pursuing a master’s” in combined BS/MS postings that
+  forgot to say bachelor; add an undergrad_ok phrase rather than deleting the
+  graduate_required line.
+- Leave “new graduate” full-time-disguised-as-intern for a later pass if logs
+  show it.
 
 ## Open Questions / TODO
 - Tune `expected_min` and lookback from skipped/new-row logs after more runs.

@@ -8,7 +8,9 @@ There is no Playwright and no generic crawler. Each company in `config/sites.yam
 
 - Scans ~91 companies listed in `config/sites.yaml` (sequential HTTP, public ATS JSON where possible).
 - Title-gates on intern / co-op **before** fetching descriptions.
-- Drops postings whose location is clearly non-US (`config/locations.yaml`). Empty / remote / city-only locations are kept.
+- Drops postings whose location is clearly non-US (`config/locations.yaml`). Empty / remote / unknown city-only locations are kept; known foreign hubs (Shanghai, Linz, …) are dropped even without a country name.
+- Drops dated postings older than 7 days. Undated postings are kept.
+- Drops internships that are clearly post-undergrad only (`config/education.yaml`).
 - Keeps a posting only if the description matches a keyword in `config/keywords.yaml` (token match, so `asic` does not match `basic`).
 - Dedupes on the canonical job link. New matches are appended in one write at the end of the run; history is never overwritten.
 - Marks previously `open` / `applied` rows `closed` when that link disappears from the company’s live intern-titled set.
@@ -72,14 +74,14 @@ python -m src.run              # write to Google Sheets
 python -m pytest
 ```
 
-`--dry-run` is the way to preview a first run (no sheet or `state/` writes). A company’s **first recorded (non-dry) run** still applies a 3-day `date_posted` lookback; undated postings are kept. Keywords are enforced immediately (`first_seen_runs: 0`).
+`--dry-run` is the way to preview a write (no sheet or `state/` writes). Dated postings older than **7 days** are dropped every run; undated postings are kept. Keywords and the education filter are enforced immediately (`first_seen_runs: 0`).
 
 The sheet does not update until the scan finishes. Typical wall time is **15–25 minutes**. A single site failure is logged and the rest continue. Exit codes: `0` clean, `1` some sites failed (rows still written), `2` sheet unavailable (non-dry-run).
 
 Logs:
 
 - `logs/run-YYYY-MM-DD.log` — full run (`parsed`, `non-US`, `kept after keywords`, `new`)
-- `logs/skipped-YYYY-MM-DD.log` — intern titles dropped by the US-location or keyword filter
+- `logs/skipped-YYYY-MM-DD.log` — intern titles dropped by the US-location, 7-day date, education, or keyword filter
 
 ## GitHub Actions
 

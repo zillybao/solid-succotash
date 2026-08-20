@@ -19,7 +19,53 @@ from src.models import JobPosting
 
 logger = logging.getLogger(__name__)
 
-FIRST_RUN_LOOKBACK_DAYS = 3
+# Eightfold standardizedLocations ends in ISO alpha-2 ("Linz, Upper Austria, AT").
+# Expand to a country name so the US-location filter can drop it. Do not leave
+# raw 2-letter codes in the location string: DE/CA collide with US states.
+_ISO_COUNTRY: dict[str, str] = {
+    "US": "United States",
+    "CA": "Canada",
+    "MX": "Mexico",
+    "GB": "United Kingdom",
+    "UK": "United Kingdom",
+    "IE": "Ireland",
+    "DE": "Germany",
+    "AT": "Austria",
+    "CH": "Switzerland",
+    "FR": "France",
+    "NL": "Netherlands",
+    "BE": "Belgium",
+    "IT": "Italy",
+    "ES": "Spain",
+    "PT": "Portugal",
+    "PL": "Poland",
+    "RO": "Romania",
+    "CZ": "Czechia",
+    "HU": "Hungary",
+    "SE": "Sweden",
+    "NO": "Norway",
+    "DK": "Denmark",
+    "FI": "Finland",
+    "CN": "China",
+    "TW": "Taiwan",
+    "HK": "Hong Kong",
+    "JP": "Japan",
+    "KR": "South Korea",
+    "IN": "India",
+    "SG": "Singapore",
+    "MY": "Malaysia",
+    "TH": "Thailand",
+    "VN": "Vietnam",
+    "PH": "Philippines",
+    "ID": "Indonesia",
+    "IL": "Israel",
+    "AE": "United Arab Emirates",
+    "AU": "Australia",
+    "NZ": "New Zealand",
+    "BR": "Brazil",
+    "AR": "Argentina",
+    "ZA": "South Africa",
+}
 
 GREENHOUSE_JOBS = "https://boards-api.greenhouse.io/v1/boards/{board}/jobs"
 GREENHOUSE_JOB = "https://boards-api.greenhouse.io/v1/boards/{board}/jobs/{job_id}"
@@ -45,7 +91,10 @@ def _parse_date(value: Any) -> date | None:
         return None
     if isinstance(value, (int, float)):
         # Greenhouse uses ms timestamps; Lever uses ms too.
+        # Eightfold sometimes sends postedTs=0 for "unknown".
         ts = float(value)
+        if ts <= 0:
+            return None
         if ts > 1e12:
             ts /= 1000.0
         return datetime.fromtimestamp(ts, tz=timezone.utc).date()
@@ -87,13 +136,6 @@ def _parse_workday_posted_on(value: str | None, *, today: date) -> date | None:
     return _parse_date(text)
 
 
-def _within_lookback(posted: date | None, *, today: date, lookback_days: int) -> bool:
-    """First-run lookback: keep if dated within window, or undated (treat as today)."""
-    if posted is None:
-        return True
-    return posted >= today - timedelta(days=lookback_days)
-
-
 def _soup(html: str) -> BeautifulSoup:
     """Prefer lxml when installed; fall back to stdlib parser."""
     try:
@@ -122,7 +164,6 @@ class SiteConfig:
         )
         self.expected_min: int = int(raw.get("expected_min", 0))
         self.first_seen_runs: int = int(raw.get("first_seen_runs", 0))
-        self.is_new_company: bool = bool(raw.get("is_new_company", False))
         # Workday
         self.workday_host: str | None = raw.get("workday_host") or raw.get("host")
         self.workday_tenant: str | None = raw.get("workday_tenant") or raw.get("tenant")
@@ -158,7 +199,6 @@ def parse_site(
     fetcher: Fetcher,
     *,
     today: date | None = None,
-    apply_lookback: bool = False,
 ) -> list[JobPosting]:
     """Fetch and parse all postings for a configured site."""
     today = today or date.today()
@@ -197,13 +237,6 @@ def parse_site(
 
     # Title noise filter (intern/internship etc.)
     postings = [p for p in postings if title_matches(p.title, site.title_keywords)]
-
-    if apply_lookback or site.is_new_company:
-        postings = [
-            p
-            for p in postings
-            if _within_lookback(p.date_posted, today=today, lookback_days=FIRST_RUN_LOOKBACK_DAYS)
-        ]
 
     for posting in postings:
         posting.link = normalize_link(posting.link)
@@ -708,6 +741,56 @@ def _parse_talentbrew(site: SiteConfig, fetcher: Fetcher) -> list[JobPosting]:
     return postings
 
 
+def _unique_location_parts(parts: list[str]) -> str:
+    seen: set[str] = set()
+    out: list[str] = []
+    for part in parts:
+        text = str(part).strip()
+        if not text:
+            continue
+        key = text.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(text)
+    return "; ".join(out)
+
+
+def _eightfold_location(job: dict[str, Any]) -> str:
+    """City list plus ISO country from standardizedLocations.
+
+    Infineon-style boards put only ``Shanghai`` / ``Linz`` in ``locations[0]``
+    while ``locations[1]`` or ``standardizedLocations`` carry China / AT.
+    """
+    parts: list[str] = []
+    locs = job.get("locations") or []
+    if isinstance(locs, list):
+        parts.extend(str(x) for x in locs)
+    elif isinstance(locs, str):
+        parts.append(locs)
+    loc = job.get("location")
+    if isinstance(loc, str):
+        parts.append(loc)
+
+    std = job.get("standardizedLocations") or []
+    if not isinstance(std, list):
+        std = []
+    iso_names: list[str] = []
+    for item in std:
+        text = str(item).strip()
+        match = re.search(r",\s*([A-Za-z]{2})$", text)
+        if match:
+            name = _ISO_COUNTRY.get(match.group(1).upper())
+            if name:
+                iso_names.append(name)
+        elif text:
+            parts.append(text)
+    if not any(p.strip() for p in parts):
+        parts.extend(str(x) for x in std)
+    parts.extend(iso_names)
+    return _unique_location_parts(parts)
+
+
 def _parse_eightfold(site: SiteConfig, fetcher: Fetcher) -> list[JobPosting]:
     """Eightfold PCS / PCSX public job search APIs."""
     domain = site.domain or site.board
@@ -763,12 +846,7 @@ def _parse_eightfold(site: SiteConfig, fetcher: Fetcher) -> list[JobPosting]:
         if not title_matches(title, site.title_keywords):
             continue
 
-        locations = job.get("locations") or []
-        location = ""
-        if isinstance(locations, list) and locations:
-            location = str(locations[0])
-        elif job.get("location"):
-            location = str(job.get("location"))
+        location = _eightfold_location(job)
 
         link = str(job.get("canonicalPositionUrl") or job.get("positionUrl") or "").strip()
         if link.startswith("/"):

@@ -1,8 +1,9 @@
 # US location filter. Tune this file, not filter.py.
 #
 # A posting is kept if the location looks US (country name, state name, or
-# "City, ST" abbreviation). It is dropped if a foreign country is named and
-# there is no US signal. Empty / "Remote" / city-only strings are kept.
+# "City, ST" abbreviation). It is dropped if a foreign country, ISO-expanded
+# country name, or listed foreign city is present and there is no US signal.
+# Empty / "Remote" / unknown city-only strings are still kept.
 
 us_country:
   - united states of america
@@ -231,3 +232,76 @@ foreign_codes:
   - HKG
   - BRA
   - ARG
+
+# City-only backstop for boards that omit the country (Infineon "Linz",
+# Workday "Hyderabad" when the detail call fails). Only cities without a
+# US namesake that would steal internships (no Cambridge, London, Paris,
+# Vancouver, Vienna, Dublin, Melbourne).
+foreign_cities:
+  - shanghai
+  - beijing
+  - shenzhen
+  - suzhou
+  - nanjing
+  - hangzhou
+  - wuhan
+  - hefei
+  - xian
+  - xi'an
+  - hsinchu
+  - taipei
+  - taichung
+  - seoul
+  - busan
+  - tokyo
+  - osaka
+  - yokohama
+  - nagoya
+  - kawasaki
+  - munich
+  - munchen
+  - münchen
+  - dresden
+  - regensburg
+  - erlangen
+  - aachen
+  - stuttgart
+  - nuremberg
+  - nürnberg
+  - neubiberg
+  - linz
+  - villach
+  - graz
+  - klagenfurt
+  - eindhoven
+  - nijmegen
+  - leuven
+  - delft
+  - grenoble
+  - bengaluru
+  - bangalore
+  - hyderabad
+  - chennai
+  - pune
+  - noida
+  - gurgaon
+  - gurugram
+  - penang
+  - kulim
+  - melaka
+  - malacca
+  - haifa
+  - yokneam
+  - bucharest
+  - sofia
+  - prague
+  - brno
+  - krakow
+  - kraków
+  - warsaw
+  - campinas
+  - zurich
+  - zürich
+  - basel
+  - lausanne
+

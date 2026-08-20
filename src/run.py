@@ -17,7 +17,10 @@ from src.dedupe import SeenJobsCache, link_hash
 from src.fetch import FetchError, Fetcher
 from src.filter import (
     filter_by_description,
+    filter_by_education,
+    filter_by_posted_date,
     filter_by_us_location,
+    load_education_filter,
     load_keywords,
     load_us_location_filter,
     strip_descriptions,
@@ -34,6 +37,7 @@ LOGS_DIR = ROOT / "logs"
 SITES_PATH = CONFIG_DIR / "sites.yaml"
 KEYWORDS_PATH = CONFIG_DIR / "keywords.yaml"
 LOCATIONS_PATH = CONFIG_DIR / "locations.yaml"
+EDUCATION_PATH = CONFIG_DIR / "education.yaml"
 SEEN_PATH = STATE_DIR / "seen_jobs.json"
 COMPANY_STATE_PATH = STATE_DIR / "company_runs.json"
 
@@ -107,6 +111,7 @@ def run(
     sites = load_sites(sites_path)
     keywords = load_keywords(keywords_path)
     us_locations = load_us_location_filter(LOCATIONS_PATH)
+    education = load_education_filter(EDUCATION_PATH)
     company_state = _load_company_state()
     cache = SeenJobsCache(SEEN_PATH)
 
@@ -131,16 +136,13 @@ def run(
     with Fetcher() as fetcher:
         for site in sites:
             run_count = _company_run_count(company_state, site.company)
-            # New company: first time we see it in company_state → 3-day lookback
-            is_new = company_state.get("companies", {}).get(site.company) is None
             log_only_filter = run_count < site.first_seen_runs
 
             log.info(
-                "Scanning %s (%s) [runs=%s, lookback=%s, filter_log_only=%s]",
+                "Scanning %s (%s) [runs=%s, filter_log_only=%s]",
                 site.company,
                 site.ats,
                 run_count,
-                is_new,
                 log_only_filter,
             )
 
@@ -149,7 +151,6 @@ def run(
                     site,
                     fetcher,
                     today=today,
-                    apply_lookback=is_new,
                 )
             except (FetchError, ValueError, Exception) as exc:  # noqa: BLE001
                 msg = f"{site.company}: {exc}"
@@ -187,8 +188,26 @@ def run(
                 )
                 _log_skipped(non_us, today)
 
+            dated, too_old = filter_by_posted_date(us_kept, today=today)
+            if too_old:
+                log.info(
+                    "%s: dropped %s posting(s) older than 7 days",
+                    site.company,
+                    len(too_old),
+                )
+                _log_skipped(too_old, today)
+
+            undergrad, grad_only = filter_by_education(dated, education)
+            if grad_only:
+                log.info(
+                    "%s: dropped %s post-undergrad posting(s)",
+                    site.company,
+                    len(grad_only),
+                )
+                _log_skipped(grad_only, today)
+
             kept, skipped = filter_by_description(
-                us_kept,
+                undergrad,
                 keywords,
                 log_only=log_only_filter,
             )
@@ -210,10 +229,12 @@ def run(
             strip_descriptions(new_postings)
             all_new.extend(new_postings)
             log.info(
-                "%s: %s parsed, %s non-US, %s kept after keywords, %s new",
+                "%s: %s parsed, %s non-US, %s too old, %s grad-only, %s kept after keywords, %s new",
                 site.company,
                 len(postings),
                 len(non_us),
+                len(too_old),
+                len(grad_only),
                 len(kept),
                 len(new_postings),
             )

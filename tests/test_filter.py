@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 
 from src.filter import (
     filter_by_description,
+    filter_by_education,
+    filter_by_posted_date,
     filter_by_us_location,
+    load_education_filter,
     load_keywords,
     load_us_location_filter,
     matches_keywords,
@@ -14,9 +18,16 @@ from src.filter import (
 from src.models import JobPosting
 
 LOCATIONS_YAML = Path(__file__).resolve().parent.parent / "config" / "locations.yaml"
+EDUCATION_YAML = Path(__file__).resolve().parent.parent / "config" / "education.yaml"
 
 
-def _posting(title: str, description: str, location: str = "") -> JobPosting:
+def _posting(
+    title: str,
+    description: str,
+    location: str = "",
+    *,
+    date_posted: date | None = None,
+) -> JobPosting:
     return JobPosting(
         company="Test",
         title=title,
@@ -24,6 +35,7 @@ def _posting(title: str, description: str, location: str = "") -> JobPosting:
         source_page="https://example.com/careers",
         location=location,
         description=description,
+        date_posted=date_posted,
     )
 
 
@@ -110,3 +122,70 @@ def test_filter_by_us_location_splits_postings() -> None:
     kept, skipped = filter_by_us_location(posts, rules)
     assert [p.location for p in kept] == ["Austin, TX", ""]
     assert [p.location for p in skipped] == ["Munich, Germany"]
+
+
+def test_us_location_drops_city_only_foreign_hubs() -> None:
+    rules = load_us_location_filter(LOCATIONS_YAML)
+    assert not rules.is_us("Shanghai")
+    assert not rules.is_us("Linz")
+    assert not rules.is_us("Linz; Austria")
+    assert not rules.is_us("Shanghai; 上海 (China); China")
+    assert not rules.is_us("Hyderabad")
+    assert not rules.is_us("Munich")
+    assert rules.is_us("Austin")
+    assert rules.is_us("Lynnwood; WA (United States); United States")
+    assert rules.is_us("Cambridge, MA")
+
+
+def test_filter_by_posted_date_keeps_recent_and_undated() -> None:
+    today = date(2026, 8, 19)
+    posts = [
+        _posting("Intern", "fpga", date_posted=date(2026, 8, 18)),
+        _posting("Intern", "fpga", date_posted=date(2026, 8, 12)),
+        _posting("Intern", "fpga", date_posted=date(2026, 8, 11)),
+        _posting("Intern", "fpga", date_posted=None),
+        _posting("Intern", "fpga", date_posted=date(2026, 6, 18)),
+    ]
+    kept, skipped = filter_by_posted_date(posts, today=today, lookback_days=7)
+    assert [p.date_posted for p in kept] == [
+        date(2026, 8, 18),
+        date(2026, 8, 12),
+        None,
+    ]
+    assert [p.date_posted for p in skipped] == [
+        date(2026, 8, 11),
+        date(2026, 6, 18),
+    ]
+
+
+def test_education_drops_grad_only_keeps_bachelor_or_above() -> None:
+    rules = load_education_filter(EDUCATION_YAML)
+    assert rules.is_post_undergrad_only("PhD Intern - RTL", "Work on FPGA.")
+    assert rules.is_post_undergrad_only(
+        "Digital Design Intern",
+        "Must be currently enrolled in a Master's or PhD program in EE.",
+    )
+    assert rules.is_post_undergrad_only(
+        "Firmware Intern",
+        "PhD required. Experience with microcontrollers.",
+    )
+    # Infineon-style: bachelor in progress, master's preferred.
+    assert not rules.is_post_undergrad_only(
+        "Technical Marketing Intern",
+        "Bachelor\u2019s degree or above (in progress); Master\u2019s preferred. ARM MCU firmware.",
+    )
+    assert not rules.is_post_undergrad_only(
+        "Software Engineering Intern",
+        "Pursuing a bachelor's or master's in CS. FPGA experience a plus.",
+    )
+    assert not rules.is_post_undergrad_only(
+        "Graduate Intern",
+        "Work on embedded firmware for sensors.",
+    )
+    posts = [
+        _posting("PhD Intern", "FPGA and RTL"),
+        _posting("Eng Intern", "Bachelor's in EE. Firmware."),
+    ]
+    kept, skipped = filter_by_education(posts, rules)
+    assert [p.title for p in kept] == ["Eng Intern"]
+    assert [p.title for p in skipped] == ["PhD Intern"]
