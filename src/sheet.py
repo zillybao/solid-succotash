@@ -26,6 +26,25 @@ SCOPES = [
 COL_LINK = 2
 COL_STATUS = 4
 
+# Sheet1 originally had source_page in column G, before date_posted was added.
+LEGACY_HEADERS_WITHOUT_DATE_POSTED: list[str] = [
+    "company",
+    "title",
+    "link",
+    "location",
+    "status",
+    "date_found",
+    "source_page",
+]
+
+
+def needs_date_posted_column(existing: list[str]) -> bool:
+    """True when row 1 is the 7-column layout that omitted date_posted."""
+    lowered = [str(h).strip().lower() for h in existing]
+    if lowered[: len(SHEET_HEADERS)] == SHEET_HEADERS:
+        return False
+    return lowered[:7] == LEGACY_HEADERS_WITHOUT_DATE_POSTED
+
 _SHEET_ID_FROM_URL = re.compile(r"/spreadsheets/d/([a-zA-Z0-9-_]+)")
 
 
@@ -128,12 +147,18 @@ class JobSheet:
         if not existing:
             self._sheet.update(range_name="A1", values=[SHEET_HEADERS], value_input_option="RAW")
             return
-        if [h.lower() for h in existing[: len(SHEET_HEADERS)]] != SHEET_HEADERS:
-            logger.warning(
-                "Sheet header mismatch (expected %s, got %s). Not reshaping existing data.",
-                SHEET_HEADERS,
-                existing,
-            )
+        if [h.lower() for h in existing[: len(SHEET_HEADERS)]] == SHEET_HEADERS:
+            return
+        if needs_date_posted_column(existing):
+            # Insert G so existing source_page values shift to H; do not overwrite G.
+            self._sheet.insert_cols([["date_posted"]], col=7)
+            logger.info("Inserted missing date_posted column (G) on %s.", self.worksheet_name)
+            return
+        logger.warning(
+            "Sheet header mismatch (expected %s, got %s). Not reshaping existing data.",
+            SHEET_HEADERS,
+            existing,
+        )
 
     def all_rows(self) -> list[dict[str, str]]:
         # get_all_records() treats the entire first row as headers. The schema

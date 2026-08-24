@@ -1,7 +1,12 @@
 """Tests for spreadsheet helpers that do not need the Sheets API."""
 
 from src.models import SHEET_HEADERS
-from src.sheet import records_from_values, resolve_worksheet_name, spreadsheet_id_from_value
+from src.sheet import (
+    needs_date_posted_column,
+    records_from_values,
+    resolve_worksheet_name,
+    spreadsheet_id_from_value,
+)
 
 
 def test_spreadsheet_id_from_raw_id() -> None:
@@ -33,6 +38,21 @@ def test_records_from_values_ignores_z1_schema_sentinel() -> None:
 
 def test_records_from_values_headers_only() -> None:
     assert records_from_values([list(SHEET_HEADERS)]) == []
+
+
+def test_needs_date_posted_column_detects_legacy_seven_col_header() -> None:
+    legacy = [
+        "company",
+        "title",
+        "link",
+        "location",
+        "status",
+        "date_found",
+        "source_page",
+    ]
+    assert needs_date_posted_column(legacy) is True
+    assert needs_date_posted_column(list(SHEET_HEADERS)) is False
+    assert needs_date_posted_column(["Company", "Title"]) is False
 
 
 def test_resolve_worksheet_name_defaults_when_env_blank(monkeypatch) -> None:
