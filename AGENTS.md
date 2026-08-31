@@ -125,9 +125,12 @@ python -m src.run              # write to Google Sheets
    (token match, so `asic` does not match `basic`). Strip `description` before
    any sheet/cache write.
 7. **Dedupe** on `normalize_link(link)` SHA-256 vs sheet rows ∪ `seen_jobs.json`.
-   New rows and closed-status updates are written once at the **end** of the run.
+   After each company, **flush** that company’s new rows and closed-status updates
+   to the sheet (and persist `seen_jobs.json` / `company_runs.json`). Do not wait
+   until the end of the run — a timeout or crash must keep earlier finds.
 
-Sites are scanned **sequentially**. Delays in `src/fetch.py`:
+Sites are scanned **sequentially** in `config/sites.yaml` list order (intentional
+priority tiers: core semi first, slow/fragile boards last). Delays in `src/fetch.py`:
 
 - JSON ATS (`get_json` / `post_json`): **0.4s** after the previous request finishes
 - HTML/SSR (`get_text`: Apple, Google, TalentBrew job pages): **1.5s**
@@ -226,16 +229,18 @@ set — a still-posted intern that fails later filters is not marked closed.
 ## Reliability & Site Health
 - Sequential requests only; split JSON vs HTML delays (see Methods).
 - Real User-Agent in `fetch.py` (not the default Python UA).
+- Per-company sheet flush so Actions timeouts still keep high-priority finds.
 - `expected_min` on a site: if intern-titled parse count is below that, log a
   warning (possible API/facet break). Many quieter companies use `expected_min: 0`.
 - Before adding a company: check `robots.txt` / ToS; prefer a public JSON
-  endpoint (Network tab) over CSS selectors; add the entry to `sites.yaml` with
-  the right `ats` + board/host fields — do not hardcode companies in `parse.py`.
+  endpoint (Network tab) over CSS selectors; add the entry to `sites.yaml` in the
+  matching priority tier (not blindly at EOF) — do not hardcode companies in
+  `parse.py`.
 
 ## Review Workflow
 Primary review is the sheet, roughly daily (newest rows at the bottom). `status`
 is `open` / `applied` / `closed`. Optional Slack (`SLACK_WEBHOOK_URL`) posts a
-short digest of new rows and of per-site failures; it is not required.
+short end-of-run digest of new rows and of per-site failures; it is not required.
 
 ## Scheduling
 - Cadence: 2 runs/day. Workflow cron: `0 0,12 * * *` UTC (8pm / 8am EST; not
@@ -264,7 +269,8 @@ short digest of new rows and of per-site failures; it is not required.
   # title_keywords: override intern/co-op title gate (see Arm)
 ```
 
-- Add companies here, not in `parse.py`.
+- Add companies here, not in `parse.py`. Place them in the matching scan-order
+  tier comment block (core semi → solid ATS → quiet → slow/fragile last).
 - Prefer intern `applied_facets` / `query` on large Workday/Eightfold/Phenom
   boards so we do not paginate the full catalog. Do not invent Workday facet IDs.
 - Conservative title/`query` filters: false negatives (missed internships) are
@@ -291,7 +297,8 @@ python -m pytest
 Cover link normalization, keyword token match, US location filter, 7-day posted-date
 lookback, education filter, Greenhouse intern-only detail fetches,
 TalentBrew card HTML, Amazon-style dates, spreadsheet-ID extraction from a
-docs URL, and blank `GOOGLE_SHEET_WORKSHEET` → `Sheet1`.
+docs URL, blank `GOOGLE_SHEET_WORKSHEET` → `Sheet1`, and per-company sheet flush
+(cache advances only after a successful append).
 
 ## Posted-date lookback
 Every run drops internships with `date_posted` older than **7 days**. Undated

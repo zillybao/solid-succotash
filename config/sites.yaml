@@ -8,7 +8,23 @@
 # SmartRecruiters extras:  board (= company identifier), query (default intern)
 # TalentBrew extras:       query (search keywords; empty = full board, then title-filter)
 #
+# Scan order is intentional priority (YAML list order = scan order):
+#   Tier 1 — core semi / proven keyword hits
+#   Tier 2 — solid faceted / useful ATS
+#   Tier 3 — quiet / low-yield boards
+#   Tier 4 — slow unfaceted Workday, Arm, or fragile Apple/Google/Tesla (last)
+# Put new companies in the matching tier — not blindly at EOF.
+#
 # Still-skipped custom boards: config/urls_skipped.txt
+
+# --- Tier 1: core semi / proven hits ---
+
+- company: AMD
+  ats: phenom
+  url: https://careers.amd.com
+  api_base: https://careers.amd.com
+  expected_min: 1
+  first_seen_runs: 0
 
 - company: NVIDIA
   ats: workday
@@ -22,15 +38,6 @@
   expected_min: 1
   first_seen_runs: 0
 
-- company: Broadcom
-  ats: workday
-  board: External_Career
-  workday_host: broadcom.wd1.myworkdayjobs.com
-  workday_tenant: broadcom
-  url: https://broadcom.wd1.myworkdayjobs.com/External_Career
-  expected_min: 1
-  first_seen_runs: 0
-
 - company: Intel
   ats: workday
   board: External
@@ -40,6 +47,116 @@
     workerSubType:
       - dc8bf79476611087dfde99931439ae75
   url: https://intel.wd1.myworkdayjobs.com/External
+  expected_min: 1
+  first_seen_runs: 0
+
+- company: Micron
+  ats: workday
+  board: External
+  workday_host: micron.wd1.myworkdayjobs.com
+  workday_tenant: micron
+  applied_facets:
+    jobFamilyGroup:
+      - bff7a31dbdd3010ca04a790caa01fe61  # Interns
+  url: https://micron.wd1.myworkdayjobs.com/External
+  expected_min: 1
+  first_seen_runs: 0
+
+- company: Analog Devices
+  ats: workday
+  board: external
+  workday_host: analog.wd1.myworkdayjobs.com
+  workday_tenant: analogdevices
+  applied_facets:
+    workerSubType:
+      - 633b03df4f5d1000ec10ab4627a80000  # Co-op/Intern (Fixed Term) (Trainee)
+  url: https://analog.wd1.myworkdayjobs.com/external
+  expected_min: 1
+  first_seen_runs: 0
+
+- company: Infineon
+  ats: eightfold
+  eightfold_api: pcsx
+  domain: infineon.com
+  url: https://jobs.infineon.com
+  query: intern
+  expected_min: 1
+  first_seen_runs: 0
+
+- company: Texas Instruments
+  ats: oracle
+  oracle_host: edbz.fa.us2.oraclecloud.com
+  board: CX
+  url: https://careers.ti.com/en/sites/CX
+  query: Intern
+  expected_min: 1
+  first_seen_runs: 0
+
+- company: onsemi
+  ats: oracle
+  oracle_host: hctz.fa.us2.oraclecloud.com
+  board: CX_1001
+  url: https://hctz.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1001
+  query: Intern
+  expected_min: 1
+  first_seen_runs: 0
+
+- company: Qualcomm
+  ats: eightfold
+  eightfold_api: pcsx
+  domain: qualcomm.com
+  url: https://careers.qualcomm.com
+  query: ""
+  extra_params:
+    filter_seniority: Intern
+  expected_min: 1
+  first_seen_runs: 0
+
+- company: Cadence
+  ats: workday
+  board: External_Careers
+  workday_host: cadence.wd1.myworkdayjobs.com
+  workday_tenant: cadence
+  applied_facets:
+    workerSubType:
+      - 631f97c41c2749729ac5abe683f281d0  # Intern
+  url: https://cadence.wd1.myworkdayjobs.com/External_Careers
+  expected_min: 1
+  first_seen_runs: 0
+
+- company: Synopsys
+  ats: talentbrew
+  url: https://careers.synopsys.com
+  query: intern
+  expected_min: 1
+  first_seen_runs: 0
+
+- company: Lattice Semiconductor
+  ats: workday
+  board: latticesemiconductorscareers
+  workday_host: latticesemi.wd5.myworkdayjobs.com
+  workday_tenant: latticesemi
+  url: https://latticesemi.wd5.myworkdayjobs.com/latticesemiconductorscareers
+  expected_min: 1
+  first_seen_runs: 0
+
+- company: Renesas
+  ats: smartrecruiters
+  board: RenesasElectronics
+  url: https://jobs.renesas.com
+  query: intern
+  expected_min: 1
+  first_seen_runs: 0
+
+- company: Microchip
+  ats: workday
+  board: External
+  workday_host: wd5.myworkdaysite.com
+  workday_tenant: microchiphr
+  applied_facets:
+    zz_LRV_Career_Level_Requisition_Extended:
+      - 57f4a35d19da0166ec5d6a6365019c99
+  url: https://wd5.myworkdaysite.com/recruiting/microchiphr/External
   expected_min: 1
   first_seen_runs: 0
 
@@ -67,24 +184,43 @@
   expected_min: 1
   first_seen_runs: 0
 
-- company: Microchip
+- company: Allegro MicroSystems
   ats: workday
-  board: External
-  workday_host: wd5.myworkdaysite.com
-  workday_tenant: microchiphr
+  board: AllegroCareers
+  workday_host: allegromicro.wd5.myworkdayjobs.com
+  workday_tenant: allegromicro
   applied_facets:
-    zz_LRV_Career_Level_Requisition_Extended:
-      - 57f4a35d19da0166ec5d6a6365019c99
-  url: https://wd5.myworkdaysite.com/recruiting/microchiphr/External
+    workerSubType:
+      - d5c1f5502c4510010719e9f3a1a60000  # Intern
+  url: https://allegromicro.wd5.myworkdayjobs.com/AllegroCareers
   expected_min: 1
   first_seen_runs: 0
 
-- company: Silicon Labs
+- company: KLA
   ats: workday
-  board: SiliconlabsCareers
-  workday_host: silabs.wd1.myworkdayjobs.com
-  workday_tenant: silabs
-  url: https://silabs.wd1.myworkdayjobs.com/SiliconlabsCareers
+  board: Search
+  workday_host: kla.wd1.myworkdayjobs.com
+  workday_tenant: kla
+  applied_facets:
+    workerSubType:
+      - bcb876733f86017814949a52051b230c  # Intern (Fixed Term)
+  url: https://kla.wd1.myworkdayjobs.com/Search
+  expected_min: 1
+  first_seen_runs: 0
+
+- company: Lam Research
+  ats: eightfold
+  eightfold_api: pcsx
+  domain: lamresearch.com
+  url: https://careers.lamresearch.com
+  query: intern
+  expected_min: 1
+  first_seen_runs: 0
+
+- company: SpaceX
+  ats: greenhouse
+  board: spacex
+  url: https://boards.greenhouse.io/spacex
   expected_min: 1
   first_seen_runs: 0
 
@@ -100,23 +236,19 @@
   expected_min: 1
   first_seen_runs: 0
 
-- company: SpaceX
-  ats: greenhouse
-  board: spacex
-  url: https://boards.greenhouse.io/spacex
+- company: Moog
+  ats: workday
+  board: MOOG_External_Career_Site
+  workday_host: moog.wd5.myworkdayjobs.com
+  workday_tenant: moog
+  applied_facets:
+    workerSubType:
+      - 5601b8111949102e1147d236ce4a0000  # Intern / Co-Op (Fixed Term)
+  url: https://moog.wd5.myworkdayjobs.com/MOOG_External_Career_Site
   expected_min: 1
   first_seen_runs: 0
 
-- company: Qualcomm
-  ats: eightfold
-  eightfold_api: pcsx
-  domain: qualcomm.com
-  url: https://careers.qualcomm.com
-  query: ""
-  extra_params:
-    filter_seniority: Intern
-  expected_min: 1
-  first_seen_runs: 0
+# --- Tier 2: solid faceted / useful ATS ---
 
 - company: Microsoft
   ats: eightfold
@@ -124,24 +256,6 @@
   domain: microsoft.com
   url: https://apply.careers.microsoft.com
   query: intern
-  expected_min: 1
-  first_seen_runs: 0
-
-- company: Infineon
-  ats: eightfold
-  eightfold_api: pcsx
-  domain: infineon.com
-  url: https://jobs.infineon.com
-  query: intern
-  expected_min: 1
-  first_seen_runs: 0
-
-- company: Lockheed Martin
-  ats: eightfold
-  eightfold_api: pcsx
-  domain: lockheedmartin.com
-  url: https://lockheedmartin.eightfold.ai
-  query: internship
   expected_min: 1
   first_seen_runs: 0
 
@@ -156,12 +270,12 @@
   expected_min: 1
   first_seen_runs: 0
 
-- company: Texas Instruments
-  ats: oracle
-  oracle_host: edbz.fa.us2.oraclecloud.com
-  board: CX
-  url: https://careers.ti.com/en/sites/CX
-  query: Intern
+- company: Lockheed Martin
+  ats: eightfold
+  eightfold_api: pcsx
+  domain: lockheedmartin.com
+  url: https://lockheedmartin.eightfold.ai
+  query: internship
   expected_min: 1
   first_seen_runs: 0
 
@@ -174,47 +288,10 @@
   expected_min: 1
   first_seen_runs: 0
 
-- company: onsemi
-  ats: oracle
-  oracle_host: hctz.fa.us2.oraclecloud.com
-  board: CX_1001
-  url: https://hctz.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1001
-  query: Intern
-  expected_min: 1
-  first_seen_runs: 0
-
 - company: Amazon
   ats: amazon
   url: https://www.amazon.jobs/content/en/career-programs/university/internships-for-students
   query: internship
-  expected_min: 1
-  first_seen_runs: 0
-
-- company: AMD
-  ats: phenom
-  url: https://careers.amd.com
-  api_base: https://careers.amd.com
-  expected_min: 1
-  first_seen_runs: 0
-
-- company: Apple
-  ats: apple
-  # team narrows ~4.5k US jobs down to internship pipeline postings
-  url: https://jobs.apple.com/en-us/search?location=united-states-USA&team=internships-STDNT-INTRN
-  expected_min: 1
-  first_seen_runs: 0
-
-- company: Google
-  ats: google
-  url: https://www.google.com/about/careers/applications/jobs/results/?employment_type=INTERN&hl=en_US&location=United%20States
-  expected_min: 1
-  first_seen_runs: 0
-
-- company: Tesla
-  ats: tesla
-  url: https://www.tesla.com/careers/search/?type=intern&site=US
-  tesla_site: US
-  tesla_type: intern
   expected_min: 1
   first_seen_runs: 0
 
@@ -227,18 +304,6 @@
     workerSubType:
       - bac5186f63f2103219f0c765df903245  # Intern/Co-op (Fixed Term)
   url: https://globalhr.wd5.myworkdayjobs.com/REC_RTX_Ext_Gateway
-  expected_min: 1
-  first_seen_runs: 0
-
-- company: Analog Devices
-  ats: workday
-  board: external
-  workday_host: analog.wd1.myworkdayjobs.com
-  workday_tenant: analogdevices
-  applied_facets:
-    workerSubType:
-      - 633b03df4f5d1000ec10ab4627a80000  # Co-op/Intern (Fixed Term) (Trainee)
-  url: https://analog.wd1.myworkdayjobs.com/external
   expected_min: 1
   first_seen_runs: 0
 
@@ -278,45 +343,6 @@
   expected_min: 1
   first_seen_runs: 0
 
-- company: Sierra Nevada
-  ats: workday
-  board: SNC_External_Career_Site
-  workday_host: snc.wd1.myworkdayjobs.com
-  workday_tenant: snc
-  url: https://snc.wd1.myworkdayjobs.com/SNC_External_Career_Site
-  expected_min: 0
-  first_seen_runs: 0
-
-- company: AeroVironment
-  ats: workday
-  board: AVAV
-  workday_host: avav.wd1.myworkdayjobs.com
-  workday_tenant: avav
-  url: https://avav.wd1.myworkdayjobs.com/AVAV
-  expected_min: 0
-  first_seen_runs: 0
-
-- company: Moog
-  ats: workday
-  board: MOOG_External_Career_Site
-  workday_host: moog.wd5.myworkdayjobs.com
-  workday_tenant: moog
-  applied_facets:
-    workerSubType:
-      - 5601b8111949102e1147d236ce4a0000  # Intern / Co-Op (Fixed Term)
-  url: https://moog.wd5.myworkdayjobs.com/MOOG_External_Career_Site
-  expected_min: 1
-  first_seen_runs: 0
-
-- company: Spectrum Control
-  ats: workday
-  board: SpectrumControl
-  workday_host: spectrumcontrol.wd1.myworkdayjobs.com
-  workday_tenant: spectrumcontrol
-  url: https://spectrumcontrol.wd1.myworkdayjobs.com/SpectrumControl
-  expected_min: 0
-  first_seen_runs: 0
-
 - company: Maxar
   ats: workday
   board: Vantor
@@ -327,51 +353,6 @@
       - 85b45153b47510fa306a2afde3ab1970  # Intern (Fixed Term) (Trainee)
   url: https://maxar.wd1.myworkdayjobs.com/Vantor
   expected_min: 1
-  first_seen_runs: 0
-
-- company: Allegro MicroSystems
-  ats: workday
-  board: AllegroCareers
-  workday_host: allegromicro.wd5.myworkdayjobs.com
-  workday_tenant: allegromicro
-  applied_facets:
-    workerSubType:
-      - d5c1f5502c4510010719e9f3a1a60000  # Intern
-  url: https://allegromicro.wd5.myworkdayjobs.com/AllegroCareers
-  expected_min: 1
-  first_seen_runs: 0
-
-- company: Cadence
-  ats: workday
-  board: External_Careers
-  workday_host: cadence.wd1.myworkdayjobs.com
-  workday_tenant: cadence
-  applied_facets:
-    workerSubType:
-      - 631f97c41c2749729ac5abe683f281d0  # Intern
-  url: https://cadence.wd1.myworkdayjobs.com/External_Careers
-  expected_min: 1
-  first_seen_runs: 0
-
-- company: KLA
-  ats: workday
-  board: Search
-  workday_host: kla.wd1.myworkdayjobs.com
-  workday_tenant: kla
-  applied_facets:
-    workerSubType:
-      - bcb876733f86017814949a52051b230c  # Intern (Fixed Term)
-  url: https://kla.wd1.myworkdayjobs.com/Search
-  expected_min: 1
-  first_seen_runs: 0
-
-- company: Rockwell Automation
-  ats: workday
-  board: External_Rockwell_Automation
-  workday_host: rockwellautomation.wd1.myworkdayjobs.com
-  workday_tenant: rockwellautomation
-  url: https://rockwellautomation.wd1.myworkdayjobs.com/External_Rockwell_Automation
-  expected_min: 0
   first_seen_runs: 0
 
 - company: Cognex
@@ -386,24 +367,6 @@
   expected_min: 1
   first_seen_runs: 0
 
-- company: Semtech
-  ats: workday
-  board: SemtechCareers
-  workday_host: semtech.wd1.myworkdayjobs.com
-  workday_tenant: semtech
-  url: https://semtech.wd1.myworkdayjobs.com/SemtechCareers
-  expected_min: 0
-  first_seen_runs: 0
-
-- company: Insitu
-  ats: workday
-  board: Careers
-  workday_host: insitu.wd1.myworkdayjobs.com
-  workday_tenant: insitu
-  url: https://insitu.wd1.myworkdayjobs.com/Careers
-  expected_min: 0
-  first_seen_runs: 0
-
 - company: ADTRAN
   ats: workday
   board: ADTRAN
@@ -414,15 +377,6 @@
       - 636f8af17f1001cc4558f3e60e01831c  # Intern (Fixed Term) (Trainee)
   url: https://adtran.wd3.myworkdayjobs.com/ADTRAN
   expected_min: 1
-  first_seen_runs: 0
-
-- company: BD
-  ats: workday
-  board: EXTERNAL_CAREER_SITE_USA
-  workday_host: bdx.wd1.myworkdayjobs.com
-  workday_tenant: bdx
-  url: https://bdx.wd1.myworkdayjobs.com/EXTERNAL_CAREER_SITE_USA
-  expected_min: 0
   first_seen_runs: 0
 
 - company: HPE
@@ -449,15 +403,6 @@
   expected_min: 1
   first_seen_runs: 0
 
-- company: Boston Dynamics
-  ats: workday
-  board: Boston_Dynamics
-  workday_host: bostondynamics.wd1.myworkdayjobs.com
-  workday_tenant: bostondynamics
-  url: https://bostondynamics.wd1.myworkdayjobs.com/Boston_Dynamics
-  expected_min: 0
-  first_seen_runs: 0
-
 - company: Azenta
   ats: workday
   board: AzentaJobs
@@ -468,15 +413,6 @@
       - 920fa62a532f4f8e9258029355a15d59  # Intern
   url: https://azenta.wd1.myworkdayjobs.com/AzentaJobs
   expected_min: 1
-  first_seen_runs: 0
-
-- company: Wisk
-  ats: workday
-  board: Wisk_Careers
-  workday_host: wisk.wd108.myworkdayjobs.com
-  workday_tenant: wisk
-  url: https://wisk.wd108.myworkdayjobs.com/Wisk_Careers
-  expected_min: 0
   first_seen_runs: 0
 
 - company: Stryker
@@ -491,18 +427,6 @@
   expected_min: 1
   first_seen_runs: 0
 
-- company: Micron
-  ats: workday
-  board: External
-  workday_host: micron.wd1.myworkdayjobs.com
-  workday_tenant: micron
-  applied_facets:
-    jobFamilyGroup:
-      - bff7a31dbdd3010ca04a790caa01fe61  # Interns
-  url: https://micron.wd1.myworkdayjobs.com/External
-  expected_min: 1
-  first_seen_runs: 0
-
 - company: Abbott
   ats: workday
   board: abbottcareers
@@ -512,33 +436,6 @@
     workerSubType:
       - d0663057a84410077d944a83d8896dd3  # Intern/Student (Fixed Term) (Trainee)
   url: https://abbott.wd5.myworkdayjobs.com/abbottcareers
-  expected_min: 1
-  first_seen_runs: 0
-
-- company: Leidos
-  ats: workday
-  board: External
-  workday_host: leidos.wd5.myworkdayjobs.com
-  workday_tenant: leidos
-  url: https://leidos.wd5.myworkdayjobs.com/External
-  expected_min: 0
-  first_seen_runs: 0
-
-- company: iRhythm
-  ats: workday
-  board: iRhythm
-  workday_host: irhythm.wd5.myworkdayjobs.com
-  workday_tenant: irhythmtech
-  url: https://irhythm.wd5.myworkdayjobs.com/iRhythm
-  expected_min: 0
-  first_seen_runs: 0
-
-- company: Lam Research
-  ats: eightfold
-  eightfold_api: pcsx
-  domain: lamresearch.com
-  url: https://careers.lamresearch.com
-  query: intern
   expected_min: 1
   first_seen_runs: 0
 
@@ -628,6 +525,52 @@
   expected_min: 1
   first_seen_runs: 0
 
+- company: Skydio
+  ats: ashby
+  board: skydio
+  url: https://jobs.ashbyhq.com/skydio
+  expected_min: 1
+  first_seen_runs: 0
+
+- company: Shield AI
+  ats: lever
+  board: shieldai
+  url: https://jobs.lever.co/shieldai
+  expected_min: 1
+  first_seen_runs: 0
+
+- company: Penumbra
+  ats: lever
+  board: penumbrainc
+  url: https://jobs.lever.co/penumbrainc
+  expected_min: 1
+  first_seen_runs: 0
+
+- company: Toyota Research Institute
+  ats: lever
+  board: tri
+  url: https://jobs.lever.co/tri
+  expected_min: 1
+  first_seen_runs: 0
+
+- company: Bosch
+  ats: smartrecruiters
+  board: BoschGroup
+  url: https://jobs.bosch.com
+  query: intern
+  expected_min: 1
+  first_seen_runs: 0
+
+- company: Western Digital
+  ats: smartrecruiters
+  board: WesternDigital
+  url: https://careers.smartrecruiters.com/WesternDigital
+  query: intern
+  expected_min: 1
+  first_seen_runs: 0
+
+# --- Tier 3: quiet / low yield ---
+
 - company: Waymo
   ats: greenhouse
   board: waymo
@@ -677,34 +620,6 @@
   expected_min: 0
   first_seen_runs: 0
 
-- company: Skydio
-  ats: ashby
-  board: skydio
-  url: https://jobs.ashbyhq.com/skydio
-  expected_min: 1
-  first_seen_runs: 0
-
-- company: Shield AI
-  ats: lever
-  board: shieldai
-  url: https://jobs.lever.co/shieldai
-  expected_min: 1
-  first_seen_runs: 0
-
-- company: Penumbra
-  ats: lever
-  board: penumbrainc
-  url: https://jobs.lever.co/penumbrainc
-  expected_min: 1
-  first_seen_runs: 0
-
-- company: Toyota Research Institute
-  ats: lever
-  board: tri
-  url: https://jobs.lever.co/tri
-  expected_min: 1
-  first_seen_runs: 0
-
 - company: Zoox
   ats: lever
   board: zoox
@@ -719,22 +634,6 @@
   expected_min: 0
   first_seen_runs: 0
 
-- company: Bosch
-  ats: smartrecruiters
-  board: BoschGroup
-  url: https://jobs.bosch.com
-  query: intern
-  expected_min: 1
-  first_seen_runs: 0
-
-- company: Renesas
-  ats: smartrecruiters
-  board: RenesasElectronics
-  url: https://jobs.renesas.com
-  query: intern
-  expected_min: 1
-  first_seen_runs: 0
-
 - company: Leonardo DRS
   ats: smartrecruiters
   board: LeonardoDRS
@@ -743,27 +642,143 @@
   expected_min: 0
   first_seen_runs: 0
 
-- company: Synopsys
-  ats: talentbrew
-  url: https://careers.synopsys.com
-  query: intern
-  expected_min: 1
-  first_seen_runs: 0
+# --- Tier 4: slow or fragile (last) ---
 
-- company: Lattice Semiconductor
+- company: Broadcom
   ats: workday
-  board: latticesemiconductorscareers
-  workday_host: latticesemi.wd5.myworkdayjobs.com
-  workday_tenant: latticesemi
-  url: https://latticesemi.wd5.myworkdayjobs.com/latticesemiconductorscareers
+  board: External_Career
+  workday_host: broadcom.wd1.myworkdayjobs.com
+  workday_tenant: broadcom
+  url: https://broadcom.wd1.myworkdayjobs.com/External_Career
   expected_min: 1
   first_seen_runs: 0
 
-- company: Western Digital
-  ats: smartrecruiters
-  board: WesternDigital
-  url: https://careers.smartrecruiters.com/WesternDigital
-  query: intern
+- company: Silicon Labs
+  ats: workday
+  board: SiliconlabsCareers
+  workday_host: silabs.wd1.myworkdayjobs.com
+  workday_tenant: silabs
+  url: https://silabs.wd1.myworkdayjobs.com/SiliconlabsCareers
+  expected_min: 1
+  first_seen_runs: 0
+
+- company: Sierra Nevada
+  ats: workday
+  board: SNC_External_Career_Site
+  workday_host: snc.wd1.myworkdayjobs.com
+  workday_tenant: snc
+  url: https://snc.wd1.myworkdayjobs.com/SNC_External_Career_Site
+  expected_min: 0
+  first_seen_runs: 0
+
+- company: AeroVironment
+  ats: workday
+  board: AVAV
+  workday_host: avav.wd1.myworkdayjobs.com
+  workday_tenant: avav
+  url: https://avav.wd1.myworkdayjobs.com/AVAV
+  expected_min: 0
+  first_seen_runs: 0
+
+- company: Spectrum Control
+  ats: workday
+  board: SpectrumControl
+  workday_host: spectrumcontrol.wd1.myworkdayjobs.com
+  workday_tenant: spectrumcontrol
+  url: https://spectrumcontrol.wd1.myworkdayjobs.com/SpectrumControl
+  expected_min: 0
+  first_seen_runs: 0
+
+- company: Rockwell Automation
+  ats: workday
+  board: External_Rockwell_Automation
+  workday_host: rockwellautomation.wd1.myworkdayjobs.com
+  workday_tenant: rockwellautomation
+  url: https://rockwellautomation.wd1.myworkdayjobs.com/External_Rockwell_Automation
+  expected_min: 0
+  first_seen_runs: 0
+
+- company: Semtech
+  ats: workday
+  board: SemtechCareers
+  workday_host: semtech.wd1.myworkdayjobs.com
+  workday_tenant: semtech
+  url: https://semtech.wd1.myworkdayjobs.com/SemtechCareers
+  expected_min: 0
+  first_seen_runs: 0
+
+- company: Insitu
+  ats: workday
+  board: Careers
+  workday_host: insitu.wd1.myworkdayjobs.com
+  workday_tenant: insitu
+  url: https://insitu.wd1.myworkdayjobs.com/Careers
+  expected_min: 0
+  first_seen_runs: 0
+
+- company: BD
+  ats: workday
+  board: EXTERNAL_CAREER_SITE_USA
+  workday_host: bdx.wd1.myworkdayjobs.com
+  workday_tenant: bdx
+  url: https://bdx.wd1.myworkdayjobs.com/EXTERNAL_CAREER_SITE_USA
+  expected_min: 0
+  first_seen_runs: 0
+
+- company: Boston Dynamics
+  ats: workday
+  board: Boston_Dynamics
+  workday_host: bostondynamics.wd1.myworkdayjobs.com
+  workday_tenant: bostondynamics
+  url: https://bostondynamics.wd1.myworkdayjobs.com/Boston_Dynamics
+  expected_min: 0
+  first_seen_runs: 0
+
+- company: Wisk
+  ats: workday
+  board: Wisk_Careers
+  workday_host: wisk.wd108.myworkdayjobs.com
+  workday_tenant: wisk
+  url: https://wisk.wd108.myworkdayjobs.com/Wisk_Careers
+  expected_min: 0
+  first_seen_runs: 0
+
+- company: Leidos
+  ats: workday
+  board: External
+  workday_host: leidos.wd5.myworkdayjobs.com
+  workday_tenant: leidos
+  url: https://leidos.wd5.myworkdayjobs.com/External
+  expected_min: 0
+  first_seen_runs: 0
+
+- company: iRhythm
+  ats: workday
+  board: iRhythm
+  workday_host: irhythm.wd5.myworkdayjobs.com
+  workday_tenant: irhythmtech
+  url: https://irhythm.wd5.myworkdayjobs.com/iRhythm
+  expected_min: 0
+  first_seen_runs: 0
+
+- company: Apple
+  ats: apple
+  # team narrows ~4.5k US jobs down to internship pipeline postings
+  url: https://jobs.apple.com/en-us/search?location=united-states-USA&team=internships-STDNT-INTRN
+  expected_min: 1
+  first_seen_runs: 0
+
+- company: Google
+  ats: google
+  url: https://www.google.com/about/careers/applications/jobs/results/?employment_type=INTERN&hl=en_US&location=United%20States
+  expected_min: 1
+  first_seen_runs: 0
+
+- company: Tesla
+  ats: tesla
+  url: https://www.tesla.com/careers/search/?type=intern&site=US
+  tesla_site: US
+  tesla_type: intern
   expected_min: 1
   first_seen_runs: 0
 

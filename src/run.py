@@ -1,4 +1,4 @@
-"""Orchestrator: fetch -> parse -> filter -> dedupe -> sheet write."""
+"""Orchestrator: fetch -> parse -> filter -> dedupe -> per-company sheet flush."""
 
 from __future__ import annotations
 
@@ -72,9 +72,10 @@ def _load_company_state(path: Path = COMPANY_STATE_PATH) -> dict[str, Any]:
         return {"companies": {}}
 
 
-def _save_company_state(state: dict[str, Any], path: Path = COMPANY_STATE_PATH) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
+def _save_company_state(state: dict[str, Any], path: Path | None = None) -> None:
+    target = COMPANY_STATE_PATH if path is None else path
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
 
 
 def _company_run_count(state: dict[str, Any], company: str) -> int:
@@ -95,6 +96,35 @@ def _log_skipped(skipped: list[JobPosting], today: date) -> None:
     with path.open("a", encoding="utf-8") as fh:
         for p in skipped:
             fh.write(f"{p.company}\t{p.title}\t{p.link}\n")
+
+
+def _flush_company(
+    *,
+    sheet: JobSheet,
+    cache: SeenJobsCache,
+    known_hashes: set[str],
+    company_state: dict[str, Any],
+    company: str,
+    new_postings: list[JobPosting],
+    rows_to_close: list[int],
+) -> tuple[int, int]:
+    """Append new rows and mark closed for one company; persist cache/state.
+
+    Cache/hashes advance only after a successful append (so a failed append is
+    retried next run). mark_closed runs after append; a close failure still leaves
+    new rows durable on the sheet and in the cache.
+    """
+    added = 0
+    if new_postings:
+        added = sheet.append_postings(new_postings)
+        for posting in new_postings:
+            known_hashes.add(link_hash(posting.link))
+        cache.update([p.link for p in new_postings])
+        cache.save()
+    closed = sheet.mark_closed(rows_to_close) if rows_to_close else 0
+    _bump_company_run(company_state, company)
+    _save_company_state(company_state)
+    return added, closed
 
 
 def run(
@@ -131,7 +161,8 @@ def run(
 
     all_new: list[JobPosting] = []
     failures: list[str] = []
-    rows_to_close: list[int] = []
+    total_added = 0
+    total_closed = 0
 
     with Fetcher() as fetcher:
         for site in sites:
@@ -157,22 +188,25 @@ def run(
                 log.error(msg)
                 failures.append(msg)
                 _bump_company_run(company_state, site.company)
+                if not dry_run:
+                    _save_company_state(company_state)
                 continue
 
             if site.expected_min and len(postings) < site.expected_min:
-                    log.warning(
-                        "%s returned %s postings (expected_min=%s) - possible selector/API break",
-                        site.company,
-                        len(postings),
-                        site.expected_min,
-                    )
+                log.warning(
+                    "%s returned %s postings (expected_min=%s) - possible selector/API break",
+                    site.company,
+                    len(postings),
+                    site.expected_min,
+                )
 
             # Status tracking: mark missing open/applied links as closed.
+            company_close_rows: list[int] = []
             live_links = {p.link for p in postings}
             for entry in open_by_source.get(site.url, []):
                 if entry["normalized_link"] not in live_links:
                     # Only move toward closed; applied stays applied until gone.
-                    rows_to_close.append(int(entry["row_number"]))
+                    company_close_rows.append(int(entry["row_number"]))
                     log.info(
                         "Marking closed: %s (was %s)",
                         entry["link"],
@@ -222,12 +256,7 @@ def run(
             new_postings = [
                 p for p in kept if link_hash(p.link) not in known_hashes
             ]
-            # Avoid duplicates within this run across sites
-            for p in new_postings:
-                known_hashes.add(link_hash(p.link))
-
             strip_descriptions(new_postings)
-            all_new.extend(new_postings)
             log.info(
                 "%s: %s parsed, %s non-US, %s too old, %s grad-only, %s kept after keywords, %s new",
                 site.company,
@@ -238,7 +267,49 @@ def run(
                 len(kept),
                 len(new_postings),
             )
-            _bump_company_run(company_state, site.company)
+
+            if dry_run:
+                for posting in new_postings:
+                    known_hashes.add(link_hash(posting.link))
+                all_new.extend(new_postings)
+                _bump_company_run(company_state, site.company)
+                continue
+
+            assert sheet is not None
+            try:
+                added, closed = _flush_company(
+                    sheet=sheet,
+                    cache=cache,
+                    known_hashes=known_hashes,
+                    company_state=company_state,
+                    company=site.company,
+                    new_postings=new_postings,
+                    rows_to_close=company_close_rows,
+                )
+            except SheetError as exc:
+                msg = f"{site.company}: sheet write failed: {exc}"
+                log.error(msg)
+                failures.append(msg)
+                # Append may have succeeded before mark_closed failed — keep those.
+                recovered = [
+                    p for p in new_postings if link_hash(p.link) in known_hashes
+                ]
+                all_new.extend(recovered)
+                total_added += len(recovered)
+                _bump_company_run(company_state, site.company)
+                _save_company_state(company_state)
+                continue
+
+            total_added += added
+            total_closed += closed
+            all_new.extend(new_postings)
+            if added or closed:
+                log.info(
+                    "%s: flushed added=%s closed=%s",
+                    site.company,
+                    added,
+                    closed,
+                )
 
     if dry_run:
         log.info("Dry run - %s new posting(s) would be added:", len(all_new))
@@ -249,15 +320,12 @@ def run(
             return 1
         return 0
 
-    assert sheet is not None
-    log.info("Sheet write planned: %s new row(s)", len(all_new))
-    added = sheet.append_postings(all_new)
-    closed = sheet.mark_closed(rows_to_close)
-    cache.update([p.link for p in all_new])
-    cache.save()
-    _save_company_state(company_state)
-
-    log.info("Done: added=%s closed=%s failures=%s", added, closed, len(failures))
+    log.info(
+        "Done: added=%s closed=%s failures=%s",
+        total_added,
+        total_closed,
+        len(failures),
+    )
     notify_new_postings(all_new)
     if failures:
         notify_failures(failures)

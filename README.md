@@ -12,7 +12,7 @@ There is no Playwright and no generic crawler. Each company in `config/sites.yam
 - Drops dated postings older than 7 days. Undated postings are kept.
 - Drops internships that are clearly post-undergrad only (`config/education.yaml`).
 - Keeps a posting only if the description matches a keyword in `config/keywords.yaml` (token match, so `asic` does not match `basic`).
-- Dedupes on the canonical job link. New matches are appended in one write at the end of the run; history is never overwritten.
+- Dedupes on the canonical job link. New matches are flushed to the sheet after each company (so a timeout still keeps earlier finds); history is never overwritten.
 - Marks previously `open` / `applied` rows `closed` when that link disappears from the company’s live intern-titled set.
 - Optional Slack digest of new rows and per-site failures.
 
