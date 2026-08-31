@@ -6,7 +6,7 @@ There is no Playwright and no generic crawler. Each company in `config/sites.yam
 
 ## What it does
 
-- Scans ~91 companies listed in `config/sites.yaml` (sequential HTTP, public ATS JSON where possible).
+- Scans ~84 companies listed in `config/sites.yaml` (sequential HTTP, public ATS JSON where possible).
 - Title-gates on intern / co-op **before** fetching descriptions.
 - Drops postings whose location is clearly non-US (`config/locations.yaml`). Empty / remote / unknown city-only locations are kept; known foreign hubs (Shanghai, Linz, …) are dropped even without a country name.
 - Drops dated postings older than 7 days. Undated postings are kept.
@@ -85,7 +85,7 @@ Logs:
 
 ## GitHub Actions
 
-[`.github/workflows/intern-finder.yml`](.github/workflows/intern-finder.yml) runs twice a day (`0 0,12 * * *` UTC ≈ 8pm / 8am EST) and on `workflow_dispatch`.
+[`.github/workflows/intern-finder.yml`](.github/workflows/intern-finder.yml) runs twice a day (`0 8,20 * * *` UTC ≈ 4am / 4pm EDT) and on `workflow_dispatch`. Cron is UTC and not DST-aware (those slots are 3am / 3pm Eastern in EST). GitHub may start the job later than the cron minute.
 
 The workflow does **not** load `.env` or `credentials.json` from the repo (both are gitignored). GitHub does not infer secret meaning from names: you create secrets with **these exact names**, the workflow copies them into env vars of the same name, and `src/sheet.py` / `src/notify.py` read them with `os.getenv`.
 
@@ -101,6 +101,8 @@ The workflow does **not** load `.env` or `credentials.json` from the repo (both 
 The JSON secret is written to `credentials.json` on the runner; the scan step then sets `GOOGLE_SERVICE_ACCOUNT_FILE=credentials.json`. Same service account, same shared spreadsheet as local runs.
 
 If some career boards 403 (Tesla / Apple / Google often do from GitHub IPs), the scanner exits `1` but still writes any new rows. The workflow treats that as a **warning** and keeps the job green. Exit `2` (sheet unavailable / missing secrets) still fails the job.
+
+After **Run scanner**, the **Report planned sheet writes** step prints `Sheet write planned: N new row(s)` and `Done: added=… closed=… failures=…` (also on the job summary). `N` is how many rows the run intended to append; `added=0` with no warning usually means nothing new, not a silent write failure. If that step warns that the count is missing, the scan likely timed out or crashed before the write.
 
 The workflow caches `state/` (`seen_jobs.json`, `company_runs.json`) between runs. Job timeout is 30 minutes; a slow scan (unfaceted Workday catalogs) can hit that cap.
 

@@ -386,31 +386,6 @@
   expected_min: 1
   first_seen_runs: 0
 
-- company: Johnson Controls
-  ats: workday
-  board: JCI
-  workday_host: jci.wd5.myworkdayjobs.com
-  workday_tenant: jci
-  applied_facets:
-    workerSubType:
-      - e6c5fb966d2f103a3269f4e23b050529  # Intern
-  url: https://jci.wd5.myworkdayjobs.com/JCI
-  expected_min: 1
-  first_seen_runs: 0
-
-- company: Magna
-  ats: workday
-  board: Magna
-  workday_host: wd3.myworkdaysite.com
-  workday_tenant: magna
-  applied_facets:
-    Worker_Type:
-      - 5aaaed564f4301b1fdb0b8f1c6025ed1  # Student / Co-Op
-      - 5aaaed564f43016878b0b7f1c60258d1  # Intern (Fixed Term) (Trainee)
-  url: https://wd3.myworkdaysite.com/recruiting/magna/Magna
-  expected_min: 1
-  first_seen_runs: 0
-
 - company: Semtech
   ats: workday
   board: SemtechCareers
@@ -462,15 +437,6 @@
   expected_min: 1
   first_seen_runs: 0
 
-- company: Bloom Energy
-  ats: workday
-  board: BloomEnergyCareers
-  workday_host: bloomenergy.wd1.myworkdayjobs.com
-  workday_tenant: bloomenergy
-  url: https://bloomenergy.wd1.myworkdayjobs.com/BloomEnergyCareers
-  expected_min: 0
-  first_seen_runs: 0
-
 - company: Advantech
   ats: workday
   board: External
@@ -501,18 +467,6 @@
     workerSubType:
       - 920fa62a532f4f8e9258029355a15d59  # Intern
   url: https://azenta.wd1.myworkdayjobs.com/AzentaJobs
-  expected_min: 1
-  first_seen_runs: 0
-
-- company: Zebra
-  ats: workday
-  board: Zebra_careers
-  workday_host: zebra.wd501.myworkdayjobs.com
-  workday_tenant: zebra
-  applied_facets:
-    workerSubType:
-      - 2e88c140a2411000e8503b59f9a80000  # Intern (Fixed Term) (Trainee)
-  url: https://zebra.wd501.myworkdayjobs.com/Zebra_careers
   expected_min: 1
   first_seen_runs: 0
 
@@ -618,13 +572,6 @@
   expected_min: 0
   first_seen_runs: 0
 
-- company: HERE
-  ats: phenom
-  url: https://careers.here.com
-  api_base: https://careers.here.com
-  expected_min: 0
-  first_seen_runs: 0
-
 - company: Rocket Lab
   ats: greenhouse
   board: rocketlab
@@ -678,13 +625,6 @@
   ats: greenhouse
   board: samsara
   url: https://boards.greenhouse.io/samsara
-  expected_min: 1
-  first_seen_runs: 0
-
-- company: Phoenix Contact
-  ats: greenhouse
-  board: phoenixcontact
-  url: https://boards.greenhouse.io/phoenixcontact
   expected_min: 1
   first_seen_runs: 0
 
@@ -791,14 +731,6 @@
   ats: smartrecruiters
   board: RenesasElectronics
   url: https://jobs.renesas.com
-  query: intern
-  expected_min: 1
-  first_seen_runs: 0
-
-- company: Continental
-  ats: smartrecruiters
-  board: Continental
-  url: https://jobs.smartrecruiters.com/Continental
   query: intern
   expected_min: 1
   first_seen_runs: 0
