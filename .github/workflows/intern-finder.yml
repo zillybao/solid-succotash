@@ -2,9 +2,9 @@ name: Intern Finder
 
 on:
   schedule:
-    # 8:00 and 20:00 America/New_York ≈ 12:00 and 00:00 UTC (EST)
+    # 4:00 and 16:00 America/New_York ≈ 08:00 and 20:00 UTC (EDT)
     # Adjust if you need DST-aware timing via a cron wrapper.
-    - cron: "0 0,12 * * *"
+    - cron: "0 8,20 * * *"
   workflow_dispatch:
 
 jobs:
@@ -54,6 +54,36 @@ jobs:
             exit 0
           fi
           exit "$code"
+
+      - name: Report planned sheet writes
+        if: always()
+        run: |
+          log=$(ls logs/run-*.log 2>/dev/null | tail -1 || true)
+          if [ -z "$log" ]; then
+            msg="No run log found; scan may have failed before logging."
+            echo "$msg"
+            echo "::warning::$msg"
+            echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          planned=$(grep -E 'Sheet write planned:' "$log" | tail -1 || true)
+          done=$(grep -E 'Done: added=' "$log" | tail -1 || true)
+          if [ -n "$planned" ]; then
+            echo "$planned"
+            echo "::notice::$planned"
+            echo "$planned" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -n "$done" ]; then
+            echo "$done"
+            echo "::notice::$done"
+            echo "$done" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -z "$planned" ] && [ -z "$done" ]; then
+            msg="No sheet-write count in $log (scan likely timed out or crashed before the write)."
+            echo "$msg"
+            echo "::warning::$msg"
+            echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Upload logs
         if: always()

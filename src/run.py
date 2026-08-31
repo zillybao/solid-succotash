@@ -250,6 +250,7 @@ def run(
         return 0
 
     assert sheet is not None
+    log.info("Sheet write planned: %s new row(s)", len(all_new))
     added = sheet.append_postings(all_new)
     closed = sheet.mark_closed(rows_to_close)
     cache.update([p.link for p in all_new])
