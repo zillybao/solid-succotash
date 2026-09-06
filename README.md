@@ -74,9 +74,9 @@ python -m src.run              # write to Google Sheets
 python -m pytest
 ```
 
-`--dry-run` is the way to preview a write (no sheet or `state/` writes). Dated postings older than **7 days** are dropped every run; undated postings are kept. Keywords and the education filter are enforced immediately (`first_seen_runs: 0`).
+`--dry-run` is the way to preview a write (no sheet or `state/` writes). If credentials are present it still **reads** the sheet so roles already stored there are not listed as new. Dated postings older than **7 days** are dropped every run; undated postings are kept. Keywords and the education filter are enforced immediately (`first_seen_runs: 0`).
 
-The sheet does not update until the scan finishes. Typical wall time is **15–25 minutes**. A single site failure is logged and the rest continue. Exit codes: `0` clean, `1` some sites failed (rows still written), `2` sheet unavailable (non-dry-run).
+New rows are flushed after each company. Typical wall time is **15–25 minutes**. A single site failure is logged and the rest continue. Exit codes: `0` clean, `1` some sites failed (rows still written), `2` sheet unavailable (non-dry-run).
 
 Logs:
 

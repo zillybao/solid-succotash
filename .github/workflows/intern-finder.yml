@@ -29,7 +29,7 @@ jobs:
           python -c "import os,pathlib; pathlib.Path('credentials.json').write_text(os.environ['GOOGLE_SERVICE_ACCOUNT_JSON'], encoding='utf-8')"
 
       - name: Restore seen-jobs cache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: state
           key: seen-jobs-${{ github.run_id }}
@@ -54,6 +54,13 @@ jobs:
             exit 0
           fi
           exit "$code"
+
+      - name: Save seen-jobs cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: state
+          key: seen-jobs-${{ github.run_id }}
 
       - name: Report planned sheet writes
         if: always()

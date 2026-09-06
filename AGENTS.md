@@ -86,6 +86,8 @@ python -m src.run              # write to Google Sheets
 ```
 
 `--dry-run` does not persist `state/company_runs.json` or `seen_jobs.json`.
+It still **reads** the sheet (when credentials exist) so already-written links
+are skipped in the preview.
 
 ## Methods (how parsing works)
 **Prefer the public ATS list API, then intern-title-gate, then description.**
@@ -124,7 +126,8 @@ python -m src.run              # write to Google Sheets
 6. **Keyword-filter** the description in memory against `config/keywords.yaml`
    (token match, so `asic` does not match `basic`). Strip `description` before
    any sheet/cache write.
-7. **Dedupe** on `normalize_link(link)` SHA-256 vs sheet rows ∪ `seen_jobs.json`.
+7. **Dedupe** vs sheet rows ∪ `seen_jobs.json` using URL identity hashes
+   (normalized link plus host aliases, locale-stripped paths, and ATS req ids).
    After each company, **flush** that company’s new rows and closed-status updates
    to the sheet (and persist `seen_jobs.json` / `company_runs.json`). Do not wait
    until the end of the run — a timeout or crash must keep earlier finds.
@@ -168,9 +171,9 @@ land in column Z). Pin appends with `table_range="A1"`.
 ## Spreadsheet Contract
 - One row per unique normalized `link`.
 - Never delete or reorder rows the agent didn’t add.
-- Dedupe key = normalized link (lowercase host, strip tracking params / fragment /
-  trailing slash). Hashes live in `state/seen_jobs.json`; the sheet is also read
-  each non-dry run.
+- Dedupe key = identity hashes of the link (normalized URL, Greenhouse
+  job-boards vs boards, Workday `/en-US/` vs not, req id). Hashes live in
+  `state/seen_jobs.json`; the sheet is also read each run, including `--dry-run`.
 - New rows append at the bottom.
 - Do not silently reshape existing columns — bump `SCHEMA_VERSION`.
 - `GOOGLE_SHEET_ID` may be the raw ID or a
@@ -294,7 +297,8 @@ short end-of-run digest of new rows and of per-site failures; it is not required
 ```
 python -m pytest
 ```
-Cover link normalization, keyword token match, US location filter, 7-day posted-date
+Cover link normalization, identity-hash dedupe (Greenhouse host aliases, Workday
+locale/req ids, HYPERLINK cells), keyword token match, US location filter, 7-day posted-date
 lookback, education filter, Greenhouse intern-only detail fetches,
 TalentBrew card HTML, Amazon-style dates, spreadsheet-ID extraction from a
 docs URL, blank `GOOGLE_SHEET_WORKSHEET` → `Sheet1`, and per-company sheet flush

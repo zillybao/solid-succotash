@@ -480,8 +480,6 @@ def _parse_workday(site: SiteConfig, fetcher: Fetcher, *, today: date) -> list[J
             detail = fetcher.get_json(detail_url)
             info = detail.get("jobPostingInfo", {}) if isinstance(detail, dict) else {}
             description = _clean_html(str(info.get("jobDescription") or ""))
-            if info.get("externalUrl"):
-                link = normalize_link(str(info["externalUrl"]))
             posted = _parse_date(info.get("postedDate") or info.get("startDate")) or posted
             location = _workday_location(location, info)
         except Exception as exc:  # noqa: BLE001 — keep listing without description

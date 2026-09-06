@@ -13,7 +13,7 @@ from typing import Any
 import yaml
 from dotenv import load_dotenv
 
-from src.dedupe import SeenJobsCache, link_hash
+from src.dedupe import SeenJobsCache, identity_hashes, is_known_link
 from src.fetch import FetchError, Fetcher
 from src.filter import (
     filter_by_description,
@@ -118,7 +118,7 @@ def _flush_company(
     if new_postings:
         added = sheet.append_postings(new_postings)
         for posting in new_postings:
-            known_hashes.add(link_hash(posting.link))
+            known_hashes.update(identity_hashes(posting.link))
         cache.update([p.link for p in new_postings])
         cache.save()
     closed = sheet.mark_closed(rows_to_close) if rows_to_close else 0
@@ -144,19 +144,32 @@ def run(
     education = load_education_filter(EDUCATION_PATH)
     company_state = _load_company_state()
     cache = SeenJobsCache(SEEN_PATH)
+    known_hashes: set[str] = set(cache.known_hashes())
+    log.info("Dedupe: %s identit(y/ies) from local cache", len(known_hashes))
 
     sheet: JobSheet | None = None
-    known_hashes: set[str] = set(cache.known_hashes())
-    if not dry_run:
-        try:
-            sheet = JobSheet()
-            known_hashes |= sheet.known_link_hashes()
-        except SheetError as exc:
+    try:
+        sheet = JobSheet(read_only=dry_run)
+        before = len(known_hashes)
+        known_hashes |= sheet.known_link_hashes()
+        log.info(
+            "Dedupe: loaded sheet rows, known identities %s → %s",
+            before,
+            len(known_hashes),
+        )
+    except SheetError as exc:
+        if dry_run:
+            log.warning(
+                "Dry-run could not read the sheet for skip-already-written (%s). "
+                "Only state/seen_jobs.json will be used.",
+                exc,
+            )
+        else:
             log.error("Sheet unavailable: %s", exc)
             return 2
 
     open_by_source: dict[str, list[dict[str, Any]]] = {}
-    if sheet is not None:
+    if sheet is not None and not dry_run:
         open_by_source = sheet.open_rows_by_source()
 
     all_new: list[JobPosting] = []
@@ -253,9 +266,7 @@ def run(
                 )
             _log_skipped(skipped if not log_only_filter else skipped, today)
 
-            new_postings = [
-                p for p in kept if link_hash(p.link) not in known_hashes
-            ]
+            new_postings = [p for p in kept if not is_known_link(p.link, known_hashes)]
             strip_descriptions(new_postings)
             log.info(
                 "%s: %s parsed, %s non-US, %s too old, %s grad-only, %s kept after keywords, %s new",
@@ -270,7 +281,7 @@ def run(
 
             if dry_run:
                 for posting in new_postings:
-                    known_hashes.add(link_hash(posting.link))
+                    known_hashes.update(identity_hashes(posting.link))
                 all_new.extend(new_postings)
                 _bump_company_run(company_state, site.company)
                 continue
@@ -292,7 +303,7 @@ def run(
                 failures.append(msg)
                 # Append may have succeeded before mark_closed failed — keep those.
                 recovered = [
-                    p for p in new_postings if link_hash(p.link) in known_hashes
+                    p for p in new_postings if is_known_link(p.link, known_hashes)
                 ]
                 all_new.extend(recovered)
                 total_added += len(recovered)

@@ -12,7 +12,7 @@ from typing import Any
 import gspread
 from google.oauth2.service_account import Credentials
 
-from src.dedupe import link_hash, normalize_link
+from src.dedupe import identity_hashes, normalize_link
 from src.models import SHEET_HEADERS, JobPosting
 
 logger = logging.getLogger(__name__)
@@ -72,22 +72,19 @@ def resolve_worksheet_name(explicit: str | None = None) -> str:
 
 
 def records_from_values(values: list[list[Any]]) -> list[dict[str, str]]:
-    """Turn sheet grid values into row dicts using columns A–H only."""
+    """Turn sheet grid values into row dicts using columns A–H only.
+
+    Keys are always ``SHEET_HEADERS`` by column index, so a renamed or
+    Title-Cased header row still maps ``link`` to column C.
+    """
     if len(values) <= 1:
         return []
-
-    header_row = values[0]
-    headers: list[str] = []
-    for i, expected in enumerate(SHEET_HEADERS):
-        raw = header_row[i] if i < len(header_row) else expected
-        name = str(raw).strip() or expected
-        headers.append(name)
 
     records: list[dict[str, str]] = []
     for row in values[1:]:
         record: dict[str, str] = {}
         nonempty = False
-        for i, key in enumerate(headers):
+        for i, key in enumerate(SHEET_HEADERS):
             cell = row[i] if i < len(row) and row[i] is not None else ""
             text = str(cell)
             record[key] = text
@@ -118,7 +115,13 @@ def _credentials_from_env() -> Credentials:
 class JobSheet:
     """Append-only internship tracker backed by Google Sheets."""
 
-    def __init__(self, spreadsheet_id: str | None = None, worksheet_name: str | None = None) -> None:
+    def __init__(
+        self,
+        spreadsheet_id: str | None = None,
+        worksheet_name: str | None = None,
+        *,
+        read_only: bool = False,
+    ) -> None:
         raw_id = spreadsheet_id or os.getenv("GOOGLE_SHEET_ID", "")
         self.spreadsheet_id = spreadsheet_id_from_value(raw_id)
         if not self.spreadsheet_id:
@@ -140,7 +143,8 @@ class JobSheet:
                 f"Spreadsheet {self.spreadsheet_id!r} not found or the service "
                 "account does not have access."
             ) from exc
-        self._ensure_headers()
+        if not read_only:
+            self._ensure_headers()
 
     def _ensure_headers(self) -> None:
         existing = self._sheet.row_values(1)
@@ -169,9 +173,9 @@ class JobSheet:
     def known_link_hashes(self) -> set[str]:
         hashes: set[str] = set()
         for row in self.all_rows():
-            link = row.get("link") or row.get("Link") or ""
+            link = row.get("link") or ""
             if link:
-                hashes.add(link_hash(link))
+                hashes.update(identity_hashes(link))
         return hashes
 
     def open_rows_by_source(self) -> dict[str, list[dict[str, Any]]]:
@@ -180,14 +184,10 @@ class JobSheet:
         if len(values) <= 1:
             return {}
 
-        headers = [h.lower() for h in values[0]]
-        try:
-            link_i = headers.index("link")
-            status_i = headers.index("status")
-            source_i = headers.index("source_page")
-        except ValueError:
-            logger.error("Sheet missing required columns among: %s", headers)
-            return {}
+        headers = [str(h).strip().lower() for h in values[0]]
+        link_i = headers.index("link") if "link" in headers else COL_LINK
+        status_i = headers.index("status") if "status" in headers else COL_STATUS
+        source_i = headers.index("source_page") if "source_page" in headers else 7
 
         by_source: dict[str, list[dict[str, Any]]] = {}
         for idx, row in enumerate(values[1:], start=2):

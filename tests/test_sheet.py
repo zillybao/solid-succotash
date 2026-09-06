@@ -36,6 +36,16 @@ def test_records_from_values_ignores_z1_schema_sentinel() -> None:
     assert rows[0]["link"] == "https://example.com/1"
 
 
+def test_records_from_values_uses_positional_headers_when_renamed() -> None:
+    values = [
+        ["Company", "Title", "Job URL", "Where", "Status", "Found", "Posted", "Source"],
+        ["Acme", "Intern", "https://example.com/1", "Austin", "open", "2026-08-18", "", "https://board"],
+    ]
+    rows = records_from_values(values)
+    assert rows[0]["link"] == "https://example.com/1"
+    assert "Job URL" not in rows[0]
+
+
 def test_records_from_values_headers_only() -> None:
     assert records_from_values([list(SHEET_HEADERS)]) == []
 
