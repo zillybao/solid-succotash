@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 from src.dedupe import SeenJobsCache, identity_hashes, is_known_link
 from src.fetch import FetchError, Fetcher
 from src.filter import (
+    POSTED_LOOKBACK_DAYS,
     filter_by_description,
     filter_by_education,
     filter_by_posted_date,
@@ -238,9 +239,10 @@ def run(
             dated, too_old = filter_by_posted_date(us_kept, today=today)
             if too_old:
                 log.info(
-                    "%s: dropped %s posting(s) older than 7 days",
+                    "%s: dropped %s posting(s) older than %s days",
                     site.company,
                     len(too_old),
+                    POSTED_LOOKBACK_DAYS,
                 )
                 _log_skipped(too_old, today)
 

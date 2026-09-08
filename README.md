@@ -9,7 +9,7 @@ There is no Playwright and no generic crawler. Each company in `config/sites.yam
 - Scans ~84 companies listed in `config/sites.yaml` (sequential HTTP, public ATS JSON where possible).
 - Title-gates on intern / co-op **before** fetching descriptions.
 - Drops postings whose location is clearly non-US (`config/locations.yaml`). Empty / remote / unknown city-only locations are kept; known foreign hubs (Shanghai, Linz, …) are dropped even without a country name.
-- Drops dated postings older than 7 days. Undated postings are kept.
+- Drops dated postings older than 3 days. Undated postings are kept.
 - Drops internships that are clearly post-undergrad only (`config/education.yaml`).
 - Keeps a posting only if the description matches a keyword in `config/keywords.yaml` (token match, so `asic` does not match `basic`).
 - Dedupes on the canonical job link. New matches are flushed to the sheet after each company (so a timeout still keeps earlier finds); history is never overwritten.
@@ -57,6 +57,8 @@ GOOGLE_SHEET_ID=your-spreadsheet-id-or-url
 
 Leave the tab named `Sheet1`, or set `GOOGLE_SHEET_WORKSHEET` to the exact tab name. A blank value also falls back to `Sheet1`. If `GOOGLE_SERVICE_ACCOUNT_JSON` is set (the full key JSON as one string), it is used instead of the file.
 
+The scanner also creates a `_seen` tab in the same spreadsheet. That tab is the skip list. **Clear the inbox tab when you are done with links; leave `_seen` alone** so the same roles are not appended again.
+
 Sheet columns (written automatically if row 1 is empty):
 
 | company | title | link | location | status | date_found | date_posted | source_page |
@@ -74,14 +76,14 @@ python -m src.run              # write to Google Sheets
 python -m pytest
 ```
 
-`--dry-run` is the way to preview a write (no sheet or `state/` writes). If credentials are present it still **reads** the sheet so roles already stored there are not listed as new. Dated postings older than **7 days** are dropped every run; undated postings are kept. Keywords and the education filter are enforced immediately (`first_seen_runs: 0`).
+`--dry-run` is the way to preview a write (no sheet or `state/` writes). If credentials are present it still **reads** the inbox and `_seen` tabs so roles already stored there are not listed as new. Dated postings older than **3 days** are dropped every run; undated postings are kept. Keywords and the education filter are enforced immediately (`first_seen_runs: 0`).
 
 New rows are flushed after each company. Typical wall time is **15–25 minutes**. A single site failure is logged and the rest continue. Exit codes: `0` clean, `1` some sites failed (rows still written), `2` sheet unavailable (non-dry-run).
 
 Logs:
 
 - `logs/run-YYYY-MM-DD.log` — full run (`parsed`, `non-US`, `kept after keywords`, `new`)
-- `logs/skipped-YYYY-MM-DD.log` — intern titles dropped by the US-location, 7-day date, education, or keyword filter
+- `logs/skipped-YYYY-MM-DD.log` — intern titles dropped by the US-location, 3-day date, education, or keyword filter
 
 ## GitHub Actions
 
@@ -95,7 +97,8 @@ The workflow does **not** load `.env` or `credentials.json` from the repo (both 
 |--------|----------|----------------|
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | yes | Entire contents of `credentials.json` (one JSON object, including `private_key` and `client_email`) |
 | `GOOGLE_SHEET_ID` | yes | Same spreadsheet ID or docs URL as local `.env` |
-| `GOOGLE_SHEET_WORKSHEET` | no | Tab name at the bottom of the spreadsheet. Omit or leave blank to use `Sheet1` |
+| `GOOGLE_SHEET_WORKSHEET` | no | Inbox tab name. Omit or leave blank to use `Sheet1` |
+| `GOOGLE_SHEET_SEEN_WORKSHEET` | no | Skip-list tab. Omit to use `_seen`. Do not clear this tab |
 | `SLACK_WEBHOOK_URL` | no | Incoming webhook URL for new-posting / failure digests |
 
 The JSON secret is written to `credentials.json` on the runner; the scan step then sets `GOOGLE_SERVICE_ACCOUNT_FILE=credentials.json`. Same service account, same shared spreadsheet as local runs.

@@ -158,6 +158,18 @@ def test_filter_by_posted_date_keeps_recent_and_undated() -> None:
     ]
 
 
+def test_filter_by_posted_date_default_is_three_days() -> None:
+    today = date(2026, 8, 19)
+    posts = [
+        _posting("Intern", "fpga", date_posted=date(2026, 8, 16)),
+        _posting("Intern", "fpga", date_posted=date(2026, 8, 15)),
+        _posting("Intern", "fpga", date_posted=None),
+    ]
+    kept, skipped = filter_by_posted_date(posts, today=today)
+    assert [p.date_posted for p in kept] == [date(2026, 8, 16), None]
+    assert [p.date_posted for p in skipped] == [date(2026, 8, 15)]
+
+
 def test_education_drops_grad_only_keeps_bachelor_or_above() -> None:
     rules = load_education_filter(EDUCATION_YAML)
     assert rules.is_post_undergrad_only("PhD Intern - RTL", "Work on FPGA.")

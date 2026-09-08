@@ -16,7 +16,7 @@ from src.models import JobPosting
 logger = logging.getLogger(__name__)
 
 # Dated postings older than this are dropped every run. Undated are kept.
-POSTED_LOOKBACK_DAYS = 7
+POSTED_LOOKBACK_DAYS = 3
 
 
 def _normalize_edu_text(text: str) -> str:

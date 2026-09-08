@@ -12,7 +12,7 @@ from typing import Any
 import gspread
 from google.oauth2.service_account import Credentials
 
-from src.dedupe import identity_hashes, normalize_link
+from src.dedupe import identity_hashes, is_known_link, normalize_link
 from src.models import SHEET_HEADERS, JobPosting
 
 logger = logging.getLogger(__name__)
@@ -45,6 +45,9 @@ def needs_date_posted_column(existing: list[str]) -> bool:
         return False
     return lowered[:7] == LEGACY_HEADERS_WITHOUT_DATE_POSTED
 
+DEFAULT_SEEN_WORKSHEET = "_seen"
+SEEN_HEADERS: list[str] = ["link", "company", "title", "date_found"]
+
 _SHEET_ID_FROM_URL = re.compile(r"/spreadsheets/d/([a-zA-Z0-9-_]+)")
 
 
@@ -69,6 +72,29 @@ def resolve_worksheet_name(explicit: str | None = None) -> str:
     raw = explicit if explicit is not None else os.getenv("GOOGLE_SHEET_WORKSHEET")
     name = (raw or "").strip()
     return name or "Sheet1"
+
+
+def resolve_seen_worksheet_name(explicit: str | None = None) -> str:
+    """Durable seen-history tab. Blank env/secret values fall back to ``_seen``.
+
+    This tab is the skip list that survives wiping the inbox worksheet.
+    """
+    raw = explicit if explicit is not None else os.getenv("GOOGLE_SHEET_SEEN_WORKSHEET")
+    name = (raw or "").strip()
+    return name or DEFAULT_SEEN_WORKSHEET
+
+
+def seen_links_needing_backfill(inbox_links: list[str], seen_hashes: set[str]) -> list[str]:
+    """Inbox links not yet recorded in the seen-history tab."""
+    known = set(seen_hashes)
+    missing: list[str] = []
+    for link in inbox_links:
+        text = (link or "").strip()
+        if not text or is_known_link(text, known):
+            continue
+        missing.append(text)
+        known.update(identity_hashes(text))
+    return missing
 
 
 def records_from_values(values: list[list[Any]]) -> list[dict[str, str]]:
@@ -127,11 +153,16 @@ class JobSheet:
         if not self.spreadsheet_id:
             raise SheetError("GOOGLE_SHEET_ID is not set.")
         self.worksheet_name = resolve_worksheet_name(worksheet_name)
+        self.seen_worksheet_name = resolve_seen_worksheet_name()
+        if self.seen_worksheet_name == self.worksheet_name:
+            raise SheetError(
+                "GOOGLE_SHEET_SEEN_WORKSHEET must be a different tab than "
+                f"{self.worksheet_name!r} (the inbox you can clear)."
+            )
         self._client = gspread.authorize(_credentials_from_env())
         try:
-            self._sheet = self._client.open_by_key(self.spreadsheet_id).worksheet(
-                self.worksheet_name
-            )
+            self._book = self._client.open_by_key(self.spreadsheet_id)
+            self._sheet = self._book.worksheet(self.worksheet_name)
         except gspread.exceptions.WorksheetNotFound as exc:
             raise SheetError(
                 f"Worksheet {self.worksheet_name!r} not found. Set "
@@ -145,6 +176,15 @@ class JobSheet:
             ) from exc
         if not read_only:
             self._ensure_headers()
+        self._seen = self._open_seen_worksheet(read_only=read_only)
+        if not read_only:
+            backfilled = self.backfill_seen_from_inbox()
+            if backfilled:
+                logger.info(
+                    "Backfilled %s inbox link(s) into %s",
+                    backfilled,
+                    self.seen_worksheet_name,
+                )
 
     def _ensure_headers(self) -> None:
         existing = self._sheet.row_values(1)
@@ -164,6 +204,85 @@ class JobSheet:
             existing,
         )
 
+    def _open_seen_worksheet(self, *, read_only: bool) -> Any:
+        try:
+            ws = self._book.worksheet(self.seen_worksheet_name)
+        except gspread.exceptions.WorksheetNotFound:
+            if read_only:
+                logger.warning(
+                    "Seen-history tab %s not found; skip list is inbox-only this run.",
+                    self.seen_worksheet_name,
+                )
+                return None
+            ws = self._book.add_worksheet(
+                title=self.seen_worksheet_name,
+                rows=2000,
+                cols=len(SEEN_HEADERS),
+            )
+            ws.update(range_name="A1", values=[SEEN_HEADERS], value_input_option="RAW")
+            logger.info("Created seen-history tab %s.", self.seen_worksheet_name)
+            return ws
+        if not read_only:
+            existing = ws.row_values(1)
+            if not existing:
+                ws.update(range_name="A1", values=[SEEN_HEADERS], value_input_option="RAW")
+        return ws
+
+    def _seen_link_hashes(self) -> set[str]:
+        if self._seen is None:
+            return set()
+        values = self._seen.get_all_values()
+        if not values:
+            return set()
+        start = 0
+        if str(values[0][0]).strip().lower() == "link":
+            start = 1
+        hashes: set[str] = set()
+        for row in values[start:]:
+            if not row:
+                continue
+            link = str(row[0] or "")
+            if link.strip():
+                hashes.update(identity_hashes(link))
+        return hashes
+
+    def backfill_seen_from_inbox(self) -> int:
+        """Copy inbox links into the seen tab so wiping the inbox keeps skip history."""
+        if self._seen is None:
+            return 0
+        inbox_links = [row.get("link") or "" for row in self.all_rows()]
+        missing = seen_links_needing_backfill(inbox_links, self._seen_link_hashes())
+        if not missing:
+            return 0
+        by_link = {row.get("link") or "": row for row in self.all_rows()}
+        rows = []
+        for link in missing:
+            record = by_link.get(link) or {}
+            rows.append(
+                [
+                    link,
+                    record.get("company") or "",
+                    record.get("title") or "",
+                    record.get("date_found") or "",
+                ]
+            )
+        self._seen.append_rows(rows, value_input_option="RAW", table_range="A1")
+        return len(rows)
+
+    def _append_seen(self, postings: list[JobPosting]) -> None:
+        if not postings or self._seen is None:
+            return
+        rows = [
+            [
+                p.link,
+                p.company,
+                p.title,
+                p.date_found.isoformat() if p.date_found else "",
+            ]
+            for p in postings
+        ]
+        self._seen.append_rows(rows, value_input_option="RAW", table_range="A1")
+
     def all_rows(self) -> list[dict[str, str]]:
         # get_all_records() treats the entire first row as headers. The schema
         # sentinel in Z1 leaves blank cells in I1:Y1, which gspread rejects as
@@ -176,6 +295,7 @@ class JobSheet:
             link = row.get("link") or ""
             if link:
                 hashes.update(identity_hashes(link))
+        hashes |= self._seen_link_hashes()
         return hashes
 
     def open_rows_by_source(self) -> dict[str, list[dict[str, Any]]]:
@@ -217,6 +337,10 @@ class JobSheet:
             value_input_option="USER_ENTERED",
             table_range="A1",
         )
+        try:
+            self._append_seen(postings)
+        except Exception as exc:  # noqa: BLE001 — inbox write already succeeded
+            logger.warning("Failed to append seen-history rows: %s", exc)
         return len(rows)
 
     def mark_closed(self, row_numbers: list[int]) -> int:

@@ -115,7 +115,7 @@ are skipped in the preview.
    still missing. Do not add US-homonym cities (Cambridge, London, Vancouver).
    If the Workday detail call fails and the city is not listed, city-only stays
    (kept as ambiguous).
-4. **Date-filter** dated postings older than **7 days**. Apply this *after*
+4. **Date-filter** dated postings older than **3 days**. Apply this *after*
    computing the live intern-titled set used for closed-status, so an old but
    still-posted intern is not marked closed. Undated postings are kept
    (Google, Tesla, TalentBrew often have no dates).
@@ -166,19 +166,25 @@ Each posting normalizes to:
 Sheet columns (`SCHEMA_VERSION = 1`): `company`, `title`, `link`, `location`,
 `status`, `date_found`, `date_posted`, `source_page`. Headers live in A–H only;
 do not write sentinels outside that table (a value in Z1 made `append_rows`
-land in column Z). Pin appends with `table_range="A1"`.
+land in column Z). Pin appends with `table_range="A1"`. A second tab `_seen`
+stores links already shown; wiping the inbox tab does not revive them.
 
 ## Spreadsheet Contract
-- One row per unique normalized `link`.
-- Never delete or reorder rows the agent didn’t add.
+- Inbox tab (`GOOGLE_SHEET_WORKSHEET`, default `Sheet1`): working queue. Safe to
+  clear after you are done with the links.
+- `_seen` tab (`GOOGLE_SHEET_SEEN_WORKSHEET`): append-only skip list. Do not
+  clear it. Created automatically; inbox links are backfilled on the next write.
+- One inbox row per unique normalized `link`.
+- Never delete or reorder `_seen` rows the agent added.
 - Dedupe key = identity hashes of the link (normalized URL, Greenhouse
   job-boards vs boards, Workday `/en-US/` vs not, req id). Hashes live in
-  `state/seen_jobs.json`; the sheet is also read each run, including `--dry-run`.
-- New rows append at the bottom.
+  `state/seen_jobs.json` plus `_seen` ∪ inbox; all three are read each run,
+  including `--dry-run`.
+- New inbox rows append at the bottom.
 - Do not silently reshape existing columns — bump `SCHEMA_VERSION`.
 - `GOOGLE_SHEET_ID` may be the raw ID or a
   `https://docs.google.com/spreadsheets/d/<id>/...` URL.
-- `GOOGLE_SHEET_WORKSHEET` is the tab name. Blank / unset (including an empty
+- `GOOGLE_SHEET_WORKSHEET` is the inbox tab name. Blank / unset (including an empty
   GitHub Actions secret) falls back to `Sheet1` — Actions always injects the
   env var when the workflow maps the secret, even if the secret does not exist.
 
@@ -193,7 +199,7 @@ Tune that file, not `parse.py`. Title-only matching misses “Software Engineeri
 Intern” roles whose FPGA/RTL work is in the body. Do not use raw substring match
 (`asic` is a substring of `basic qualifications`).
 
-Skipped intern titles (no keyword hit, non-US location, older than 7 days, or
+Skipped intern titles (no keyword hit, non-US location, older than 3 days, or
 post-undergrad-only) go to `logs/skipped-YYYY-MM-DD.log` (company, title, link —
 not the description).
 
@@ -213,8 +219,10 @@ internships) are still worse than a few extra rows — keep empty/unknown-city
 locations.
 
 **Date filter:** every run, drop internships whose `date_posted` is older than
-7 days. Undated = kept. This no longer depends on `company_runs.json`; a second
+3 days. Undated = kept. This no longer depends on `company_runs.json`; a second
 scan cannot dump a backlog of month-old jobs that the first lookback skipped.
+Prefer original posted/created timestamps over `updated_at` so an old listing
+that was edited yesterday is still dropped.
 
 **Education filter** (`config/education.yaml`): conservative. Tune phrases from
 skipped/new-row logs. Do not drop on the word “graduate” alone.
@@ -298,18 +306,19 @@ short end-of-run digest of new rows and of per-site failures; it is not required
 python -m pytest
 ```
 Cover link normalization, identity-hash dedupe (Greenhouse host aliases, Workday
-locale/req ids, HYPERLINK cells), keyword token match, US location filter, 7-day posted-date
+locale/req ids, HYPERLINK cells), keyword token match, US location filter, 3-day posted-date
 lookback, education filter, Greenhouse intern-only detail fetches,
 TalentBrew card HTML, Amazon-style dates, spreadsheet-ID extraction from a
 docs URL, blank `GOOGLE_SHEET_WORKSHEET` → `Sheet1`, and per-company sheet flush
 (cache advances only after a successful append).
 
 ## Posted-date lookback
-Every run drops internships with `date_posted` older than **7 days**. Undated
+Every run drops internships with `date_posted` older than **3 days**. Undated
 postings are treated as “found today” (kept). Google, Tesla, and TalentBrew often
 have no dates — lookback will not shrink those boards. Amazon English dates
 (`July 29, 2026`) are parsed. Workday `startDate` is the posting start (used when
 `postedDate` is missing). Eightfold `postedTs=0` is treated as unknown, not 1970.
+Greenhouse uses `created_at` (not `updated_at`) so a refreshed old req is dropped.
 
 `first_seen_runs` counts successful-or-failed attempts once state is saved (not
 on `--dry-run`). With `first_seen_runs: 0` it does not keep keyword misses.

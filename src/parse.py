@@ -286,7 +286,7 @@ def _parse_greenhouse(site: SiteConfig, fetcher: Fetcher) -> list[JobPosting]:
                     exc,
                 )
 
-        posted = _parse_date(job.get("updated_at") or job.get("created_at"))
+        posted = _parse_date(job.get("created_at") or job.get("first_published") or job.get("updated_at"))
         postings.append(
             JobPosting(
                 company=site.company,
@@ -862,7 +862,7 @@ def _parse_eightfold(site: SiteConfig, fetcher: Fetcher) -> list[JobPosting]:
                     description = _clean_html(str(detail.get("job_description") or ""))
                     if detail.get("canonicalPositionUrl"):
                         link = str(detail["canonicalPositionUrl"])
-                    posted = _parse_date(detail.get("t_create") or detail.get("t_update")) or posted
+                    posted = _parse_date(detail.get("t_create") or detail.get("postedTs")) or posted
             except Exception as exc:  # noqa: BLE001
                 logger.warning("%s: Eightfold detail failed for %s: %s", site.company, job_id, exc)
 

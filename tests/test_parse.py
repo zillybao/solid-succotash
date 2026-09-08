@@ -118,6 +118,7 @@ def test_greenhouse_detail_fetch_only_intern_titles() -> None:
                         "title": "FPGA Intern",
                         "absolute_url": "https://boards.greenhouse.io/spacex/jobs/1",
                         "location": {"name": "CA"},
+                        "created_at": "2026-07-01T00:00:00Z",
                         "updated_at": "2026-08-16T00:00:00Z",
                     },
                     {
@@ -152,6 +153,7 @@ def test_greenhouse_detail_fetch_only_intern_titles() -> None:
     assert staff_detail not in fetcher.calls
     by_title = {p.title: p for p in postings}
     assert "RTL" in by_title["FPGA Intern"].description
+    assert by_title["FPGA Intern"].date_posted == date(2026, 7, 1)
     assert "firmware" in by_title["Avionics Intern"].description
 
 

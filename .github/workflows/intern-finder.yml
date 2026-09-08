@@ -41,6 +41,7 @@ jobs:
           GOOGLE_SERVICE_ACCOUNT_FILE: credentials.json
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
           GOOGLE_SHEET_WORKSHEET: ${{ secrets.GOOGLE_SHEET_WORKSHEET }}
+          GOOGLE_SHEET_SEEN_WORKSHEET: ${{ secrets.GOOGLE_SHEET_SEEN_WORKSHEET }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
           set +e

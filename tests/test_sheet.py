@@ -1,10 +1,13 @@
 """Tests for spreadsheet helpers that do not need the Sheets API."""
 
+from src.dedupe import identity_hashes
 from src.models import SHEET_HEADERS
 from src.sheet import (
     needs_date_posted_column,
     records_from_values,
+    resolve_seen_worksheet_name,
     resolve_worksheet_name,
+    seen_links_needing_backfill,
     spreadsheet_id_from_value,
 )
 
@@ -71,3 +74,23 @@ def test_resolve_worksheet_name_defaults_when_env_blank(monkeypatch) -> None:
     monkeypatch.delenv("GOOGLE_SHEET_WORKSHEET", raising=False)
     assert resolve_worksheet_name() == "Sheet1"
     assert resolve_worksheet_name("  Internships  ") == "Internships"
+
+
+def test_resolve_seen_worksheet_name_defaults_when_env_blank(monkeypatch) -> None:
+    monkeypatch.setenv("GOOGLE_SHEET_SEEN_WORKSHEET", "")
+    assert resolve_seen_worksheet_name() == "_seen"
+    monkeypatch.delenv("GOOGLE_SHEET_SEEN_WORKSHEET", raising=False)
+    assert resolve_seen_worksheet_name() == "_seen"
+    assert resolve_seen_worksheet_name("  history  ") == "history"
+
+
+def test_seen_links_needing_backfill_skips_known_and_variants() -> None:
+    known = identity_hashes("https://boards.greenhouse.io/spacex/jobs/1")
+    inbox = [
+        "https://job-boards.greenhouse.io/spacex/jobs/1",
+        "https://boards.greenhouse.io/spacex/jobs/2",
+        "",
+    ]
+    assert seen_links_needing_backfill(inbox, known) == [
+        "https://boards.greenhouse.io/spacex/jobs/2",
+    ]
